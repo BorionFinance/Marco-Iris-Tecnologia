@@ -17,6 +17,11 @@ let AUTO_BACKUP_TIMER=null;
 let LAST_AUTO_BACKUP_AT='';
 let LOCKED=true;
 let LOCK_NETWORK=null;
+let BACKGROUND_SAVE_REQUESTED=0;
+let BACKGROUND_SAVE_COMPLETED=0;
+let BACKGROUND_SAVE_PROMISE=null;
+let BACKGROUND_SAVE_OPTIONS={};
+let BACKGROUND_SAVE_WAITERS=[];
 
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -102,6 +107,8 @@ async function publishBridgeConfirmed(){
 async function flushCloudState(reason='alteracao',{backup=false,retryMedia=true}={}){
   if(!window.GoogleDriveMarco?.isConfigured?.())return {skipped:true};
   if(retryMedia)await syncPendingMedia();
+  window.MarcoBorionInterop?.prepareState?.(STATE);
+  await MarcoStorage.save(STATE,{touch:false});
   await GoogleDriveMarco.enqueueSave(STATE,{backup,reason:cloudReason(reason)});
   const bridge=await publishBridgeConfirmed();
   return {saved:true,bridge};
@@ -113,31 +120,87 @@ function scheduleCloudRetry(reason='alteracao'){
     catch(error){console.warn('[CLOUD_RETRY]',error);setSaveStatus('Salvo local · nuvem ainda pendente','warn');scheduleCloudRetry(reason);}
   },5000);
 }
+function mergeBackgroundSaveOptions(current,next){
+  return {
+    folder:current.folder===true||next.folder!==false,
+    google:current.google===true||next.google!==false,
+    backup:!!(current.backup||next.backup),
+    media:current.media===true||next.media!==false,
+    reason:String(next.reason||current.reason||'alteracao')
+  };
+}
+function settleBackgroundSaveWaiters(target,result,error){
+  const keep=[];
+  for(const waiter of BACKGROUND_SAVE_WAITERS){
+    if(waiter.seq<=target){error?waiter.reject(error):waiter.resolve(result);}else keep.push(waiter);
+  }
+  BACKGROUND_SAVE_WAITERS=keep;
+}
+async function runBackgroundSaveQueue(){
+  if(BACKGROUND_SAVE_PROMISE)return await BACKGROUND_SAVE_PROMISE;
+  BACKGROUND_SAVE_PROMISE=(async()=>{
+    let lastResult={local:true,folder:false,drive:false,bridge:false,errors:[]};
+    while(BACKGROUND_SAVE_COMPLETED<BACKGROUND_SAVE_REQUESTED){
+      const target=BACKGROUND_SAVE_REQUESTED;
+      const opts=BACKGROUND_SAVE_OPTIONS;
+      BACKGROUND_SAVE_OPTIONS={};
+      const result={local:true,folder:false,drive:false,bridge:false,errors:[]};
+      try{
+        if(data().settings.autosaveFolder&&opts.folder!==false){
+          try{const h=await MarcoStorage.getFolderHandle();if(h&&await MarcoStorage.ensurePermission(h,false)){await MarcoStorage.saveToFolder(STATE,{handle:h});result.folder=true;}}
+          catch(error){console.warn('[BACKGROUND_FOLDER]',error);result.errors.push(`Pasta local: ${error.message}`);}
+        }
+        if(data().settings.autosaveGoogle&&opts.google!==false&&GoogleDriveMarco.isConfigured()){
+          try{
+            const cloud=await flushCloudState(opts.reason||'alteracao',{backup:!!opts.backup,retryMedia:opts.media!==false});
+            result.drive=!!cloud?.saved;
+            result.bridge=!!cloud?.bridge&&!cloud.bridge.skipped;
+            clearTimeout(CLOUD_RETRY_TIMER);
+          }catch(error){
+            console.warn('[BACKGROUND_CLOUD]',error);result.errors.push(`Google Drive/integração: ${error.message}`);scheduleCloudRetry(opts.reason||'alteracao');
+          }
+        }
+        if(result.errors.length)setSaveStatus('Salvo local · nuvem pendente (nova tentativa em 5 s)','warn');
+        else if(result.bridge)setSaveStatus('Drive + Borion_Integracoes confirmados','ok');
+        else if(result.drive)setSaveStatus('Google Drive confirmado','ok');
+        else if(result.folder)setSaveStatus('Pasta local sincronizada','ok');
+        else setSaveStatus('Salvo localmente','ok');
+        BACKGROUND_SAVE_COMPLETED=target;
+        lastResult=result;
+        settleBackgroundSaveWaiters(target,result,null);
+      }catch(error){
+        BACKGROUND_SAVE_COMPLETED=target;
+        settleBackgroundSaveWaiters(target,null,error);
+        throw error;
+      }
+    }
+    return lastResult;
+  })().finally(()=>{
+    BACKGROUND_SAVE_PROMISE=null;
+    if(BACKGROUND_SAVE_COMPLETED<BACKGROUND_SAVE_REQUESTED)runBackgroundSaveQueue().catch(error=>console.warn('[BACKGROUND_SAVE_QUEUE]',error));
+  });
+  return await BACKGROUND_SAVE_PROMISE;
+}
+function queueBackgroundSave(opts={}){
+  BACKGROUND_SAVE_OPTIONS=mergeBackgroundSaveOptions(BACKGROUND_SAVE_OPTIONS,{...opts,reason:cloudReason(opts.reason||'alteracao')});
+  const seq=++BACKGROUND_SAVE_REQUESTED;
+  const promise=new Promise((resolve,reject)=>BACKGROUND_SAVE_WAITERS.push({seq,resolve,reject}));
+  queueMicrotask(()=>runBackgroundSaveQueue().catch(error=>console.warn('[BACKGROUND_SAVE]',error)));
+  return promise;
+}
 async function persist(action='',detail='',opts={}){
   if(action)addAudit(action,detail);
+  /* A projeção da integração e os tombstones entram no MESMO salvamento local da
+     alteração. Assim, até uma atualização imediata da página preserva a exclusão
+     que ainda está a caminho do Google Drive/Borion. */
+  window.MarcoBorionInterop?.prepareState?.(STATE);
   await MarcoStorage.save(STATE);
-  const result={local:true,folder:false,drive:false,bridge:false,errors:[]};
-  setSaveStatus('Salvo localmente · enviando para a nuvem','warn');
-
   clearTimeout(AUTOSAVE_TIMER);
-  if(data().settings.autosaveFolder&&opts.folder!==false){
-    try{const h=await MarcoStorage.getFolderHandle();if(h&&await MarcoStorage.ensurePermission(h,false)){await MarcoStorage.saveToFolder(STATE,{handle:h});result.folder=true;}}
-    catch(error){console.warn(error);result.errors.push(`Pasta local: ${error.message}`);}
-  }
-
   clearTimeout(GOOGLE_TIMER);
-  if(data().settings.autosaveGoogle&&opts.google!==false&&GoogleDriveMarco.isConfigured()){
-    try{
-      const cloud=await flushCloudState(action||detail||'alteracao',{backup:!!opts.backup,retryMedia:opts.media!==false});
-      result.drive=!!cloud?.saved;
-      result.bridge=!!cloud?.bridge&&!cloud.bridge.skipped;
-      clearTimeout(CLOUD_RETRY_TIMER);
-      setSaveStatus(result.bridge?'Drive + Borion_Integracoes confirmados':'Google Drive confirmado','ok');
-    }catch(error){
-      console.warn('[PERSIST_CLOUD]',error);result.errors.push(`Google Drive/integração: ${error.message}`);setSaveStatus('Salvo local · nuvem pendente (nova tentativa em 5 s)','warn');scheduleCloudRetry(action||'alteracao');
-    }
-  }else setSaveStatus(result.folder?'Pasta local sincronizada':'Salvo localmente','ok');
-  return result;
+  setSaveStatus('Salvo localmente · sincronizando em segundo plano','warn');
+  const queued=queueBackgroundSave({folder:opts.folder,google:opts.google,backup:!!opts.backup,media:opts.media,reason:action||detail||'alteracao'});
+  if(opts.awaitRemote===true)return await queued;
+  return {local:true,queued:true,folder:false,drive:false,bridge:false,errors:[]};
 }
 function setSaveStatus(text,tone=''){const el=$('#save-status');if(el){el.textContent=text;el.dataset.tone=tone;}}
 function getViewMode(section,fallback=VIEW_MODE_DEFAULTS[section]||'list'){
@@ -481,7 +544,9 @@ async function submitLogin(form){
     window.MarcoBorionInterop?.setNotReady?.('Aguardando carregamento da base oficial.');
     if(button){button.disabled=true;button.classList.add('is-loading');}
     progress('Conectando ao Google Drive');
-    const user=await window.GoogleDriveMarco.authenticate(true);
+    /* initializeOfficialState já autentica, confirma a conta e localiza a pasta.
+       Evitar authenticate() antes dela elimina uma segunda consulta ao Google no
+       mesmo clique e reduz sensivelmente o tempo de entrada. */
     const localBefore=clone(STATE);
     const result=await window.GoogleDriveMarco.initializeOfficialState(STATE,{interactive:true,onProgress:progress});
     progress('Validando dados');
@@ -489,17 +554,19 @@ async function submitLogin(form){
     STATE=result.state;
     await backupStateBeforeV220Migration(STATE,'login-drive-oficial');
     normalizeState();
-    await MarcoStorage.save(STATE);
-    progress('Preparando integração');
+    window.MarcoBorionInterop?.prepareState?.(STATE);
+    await MarcoStorage.save(STATE,{touch:false});
     window.MarcoBorionInterop?.resume?.('offline-mode');
     window.MarcoBorionInterop?.setReady?.(STATE,{companyInstanceId:STATE?.interconnections?.borion?.companyInstanceId||STATE?.interconnections?.borion?.instanceId});
-    progress('Confirmando dados e integração');
-    await flushCloudState('login-confirmado',{backup:false,retryMedia:true});
-    const diagnosis=await GoogleDriveMarco.diagnose(STATE);
-    if(!diagnosis.ok)throw new Error('O login foi concluído, mas a base ou o arquivo marco-iris.bridge.json não foi confirmado no Google Drive.');
-    progress('Finalizando');
-    await completeLogin('google',String(user?.email||result.user?.email||''));
-    return user;
+    progress('Abrindo aplicativo');
+    await completeLogin('google',String(result.user?.email||''));
+    /* A tela já está liberada. Drive, mídias e bridge seguem pela fila serializada
+       em segundo plano; qualquer falha fica pendente e tenta novamente em 5 s. */
+    queueBackgroundSave({reason:'login-confirmado',backup:false,media:true}).catch(error=>{
+      console.warn('[LOGIN_BACKGROUND_SYNC]',error);
+      setSaveStatus('Aplicativo aberto · sincronização da nuvem pendente','warn');
+    });
+    return result.user;
   })().catch(error=>{window.MarcoBorionInterop?.setNotReady?.(error.message||'Falha na sincronização inicial.');throw error;}).finally(()=>{
     if(button?.isConnected){button.disabled=false;button.classList.remove('is-loading');button.innerHTML=original;}
     LOGIN_GOOGLE_INFLIGHT=null;
@@ -553,7 +620,7 @@ function renderLogin(entry=''){
         <div class="lock-feature"><div class="lock-feature-icon">${icon('cloud')}</div><div><strong>Soluções em nuvem</strong><small>Fotos, PDFs, anexos e dados organizados no Google Drive.</small></div></div>
       </div>
     </section>
-    <footer class="lock-footer"><div class="lock-footer-cards"><div class="lock-footer-card"><strong><span class="status-dot-live"></span> Sistema operacional</strong><small>Interface pronta para uso.</small></div><div class="lock-footer-card"><strong>${icon('cloud')} Google Drive e backups</strong><small>Dados e arquivos em pastas separadas.</small></div><div class="lock-footer-card"><strong>${icon('download')} Aplicativo PWA</strong><small>Instalação no computador e celular.</small></div></div><div class="lock-footer-meta"><strong>Marco Iris Tecnologia © 2026</strong><span>v2.4.0</span></div></footer>
+    <footer class="lock-footer"><div class="lock-footer-cards"><div class="lock-footer-card"><strong><span class="status-dot-live"></span> Sistema operacional</strong><small>Interface pronta para uso.</small></div><div class="lock-footer-card"><strong>${icon('cloud')} Google Drive e backups</strong><small>Dados e arquivos em pastas separadas.</small></div><div class="lock-footer-card"><strong>${icon('download')} Aplicativo PWA</strong><small>Instalação no computador e celular.</small></div></div><div class="lock-footer-meta"><strong>Marco Iris Tecnologia © 2026</strong><span>v2.4.1</span></div></footer>
   </main>`;
   startLockNetwork();
 }
@@ -973,7 +1040,7 @@ async function boot(){
   LOCKED=true;
   renderLogin();
   if('serviceWorker' in navigator){
-    navigator.serviceWorker.register('./sw.js?v=2.4.0').then(reg=>reg?.update?.()).catch(e=>console.warn('Service worker:',e));
+    navigator.serviceWorker.register('./sw.js?v=2.4.1').then(reg=>reg?.update?.()).catch(e=>console.warn('Service worker:',e));
   }
   window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();window.__installPrompt=e;});
   startAutoBackupRotation();

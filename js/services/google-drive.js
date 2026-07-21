@@ -27,7 +27,31 @@
   function jsonClone(value){return value==null?value:JSON.parse(JSON.stringify(value));}
   function canonical(value){if(Array.isArray(value))return value.map(canonical);if(value&&typeof value==='object'){const out={};Object.keys(value).sort().forEach(k=>{if(k!=='integrity')out[k]=canonical(value[k]);});return out;}return value;}
   async function stateChecksum(state){const text=JSON.stringify(canonical(state));const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text));return [...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,'0')).join('');}
-  function sourceCount(state){let total=0;for(const d of Object.values(state?.dataByProfile||{})){if(!d||typeof d!=='object')continue;for(const k of ['clients','serviceOrders','orderItems','payments','products','services','supplies','stockMovements','appointments','consents'])total+=Array.isArray(d[k])?d[k].length:0;}return total;}
+  const SOURCE_COLLECTIONS=['clients','serviceOrders','orderItems','payments','products','services','supplies','stockMovements','appointments','consents'];
+  function sourceCount(state){let total=0;for(const d of Object.values(state?.dataByProfile||{})){if(!d||typeof d!=='object')continue;for(const k of SOURCE_COLLECTIONS)total+=Array.isArray(d[k])?d[k].length:0;}return total;}
+  function explicitLocalDeletionCoverage(localState,remoteState){
+    const tombstones=localState?.interconnections?.borion?.tombstones;
+    if(!Array.isArray(tombstones)||!tombstones.length)return false;
+    const tombstoneKeys=new Set(tombstones.flatMap(item=>[String(item?.sourceRecordId||''),String(item?.entityId||''),String(item?.aggregateId||'')]).filter(Boolean));
+    let missing=0;
+    for(const [profileId,remoteData] of Object.entries(remoteState?.dataByProfile||{})){
+      const localData=localState?.dataByProfile?.[profileId]||{};
+      for(const collection of SOURCE_COLLECTIONS){
+        const localIds=new Set((localData?.[collection]||[]).map(item=>String(item?.id||item?.code||'')).filter(Boolean));
+        for(const item of (remoteData?.[collection]||[])){
+          const entityId=String(item?.code||item?.id||'').trim();
+          if(entityId&&localIds.has(entityId))continue;
+          missing++;
+          if(collection!=='payments'||!entityId)return false;
+          const normalized=String(item?.type||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+          const kind=normalized==='despesa'?'expense':'receipt';
+          const sourceRecordId=`marco:${kind}:${entityId}`;
+          if(!tombstoneKeys.has(sourceRecordId)&&!tombstoneKeys.has(entityId))return false;
+        }
+      }
+    }
+    return missing>0;
+  }
   function companyIdOf(state){return String(state?.interconnections?.borion?.companyInstanceId||state?.interconnections?.borion?.instanceId||'').trim();}
   function ensureCompanyId(state){
     if(!state.interconnections||typeof state.interconnections!=='object')state.interconnections={};
@@ -52,7 +76,7 @@
   function assertSafeReplacement(localState,remoteState){
     const localCheck=validateOfficialState(localState),remoteCheck=validateOfficialState(remoteState);if(!localCheck.valid)throw new Error('A base local é inválida: '+localCheck.errors.join(' '));if(!remoteCheck.valid)throw new Error('A base oficial do Drive é inválida: '+remoteCheck.errors.join(' '));
     const lc=companyIdOf(localState),rc=companyIdOf(remoteState);if(rc&&lc&&rc!==lc){const e=new Error('Conflito de instalação: o identificador oficial da empresa é diferente. Nenhum dado foi enviado.');e.code='COMPANY_INSTANCE_CONFLICT';throw e;}
-    if(remoteCheck.count>0&&localCheck.count===0){const e=new Error('A base local está vazia, mas o Google Drive contém dados. A publicação foi bloqueada para evitar perda de informações.');e.code='EMPTY_BASE_BLOCKED';throw e;}
+    if(remoteCheck.count>0&&localCheck.count===0&&!explicitLocalDeletionCoverage(localState,remoteState)){const e=new Error('A base local está vazia, mas o Google Drive contém dados. A publicação foi bloqueada para evitar perda de informações.');e.code='EMPTY_BASE_BLOCKED';throw e;}
     const known=Math.max(0,Number(localState?.driveSync?.revision)||0),remoteRev=Math.max(0,Number(remoteState?.driveSync?.revision)||0);if(remoteRev>known){const e=new Error('O Google Drive possui uma revisão mais nova. Carregue a base oficial antes de salvar.');e.code='REMOTE_NEWER';throw e;}
     return true;
   }
@@ -193,7 +217,7 @@
   }
   async function writeInstallationManifest(rootIdValue,structure,state,user){
     if(!rootIdValue||!structure||!state)return null;
-    const manifest={schema:'marco.iris.installation',schemaVersion:1,appId:'marco-iris-tecnologia',appVersion:'2.4.0',createdOrUpdatedAt:new Date().toISOString(),companyInstanceId:companyIdOf(state),googleAccount:String(user?.email||''),rootFolderId:rootIdValue,folders:Object.fromEntries(Object.entries(FOLDERS).map(([key,name])=>[key,{name,id:structure[key]||''}]))};
+    const manifest={schema:'marco.iris.installation',schemaVersion:1,appId:'marco-iris-tecnologia',appVersion:'2.4.1',createdOrUpdatedAt:new Date().toISOString(),companyInstanceId:companyIdOf(state),googleAccount:String(user?.email||''),rootFolderId:rootIdValue,folders:Object.fromEntries(Object.entries(FOLDERS).map(([key,name])=>[key,{name,id:structure[key]||''}]))};
     const file=await resolveIntegrationFile(rootIdValue,INSTALLATION_FILE,true,manifest);
     await updateJson(file.id,manifest);
     const confirmed=await readJson(file.id);
@@ -270,7 +294,15 @@
     const localCompany=companyIdOf(localState),remoteCompany=companyIdOf(remoteState);
     const foreignInstance=!!(localCompany&&remoteCompany&&localCompany!==remoteCompany);
     const localRev=Math.max(0,Number(localState?.driveSync?.revision)||0),remoteRev=Math.max(0,Number(remoteState?.driveSync?.revision)||0);
-    return {useRemote:remoteRev>localRev, foreignInstance, localRev, remoteRev};
+    const localCount=sourceCount(localState),remoteCount=sourceCount(remoteState);
+    const explicitDeletionCoverage=explicitLocalDeletionCoverage(localState,remoteState);
+    /* A base oficial nunca pode ficar inacessível só porque o navegador perdeu o
+       cache local ou ficou com um número de revisão antigo/empatado. A única exceção
+       é uma exclusão local explícita, já registrada por tombstone, cobrindo todos os
+       registros que sumiram. */
+    const localEmptyRemoteHasData=localCount===0&&remoteCount>0&&!explicitDeletionCoverage;
+    const useRemote=foreignInstance||localEmptyRemoteHasData||remoteRev>localRev;
+    return {useRemote,foreignInstance,localEmptyRemoteHasData,explicitDeletionCoverage,localRev,remoteRev,localCount,remoteCount};
   }
 
   let saveQueueRequested=0,saveQueueCompleted=0,saveQueueState=null,saveQueueOptions={},saveQueuePromise=null,saveQueueWaiters=[];
@@ -350,7 +382,7 @@
     async writeForceSave(state){const {structure}=await this.ensureConnection(false);return await writeRotatingBackup(structure.backups,state,{kind:'forcesave',force:true});},
     async diagnose(state){const conn=await this.ensureConnection(false),main=await this.findDataFile(),bridge=await this.readIntegrationJson('marco-iris.bridge.json');return {ok:!!(main&&bridge),user:conn.user,rootId:conn.rootId,folders:await this.folderStatus(),mainFile:main||null,bridgeFile:bridge?{revision:Number(bridge.revision)||0,recordCount:Number(bridge.recordCount)||0,generatedAt:bridge.generatedAt||'',companyInstanceId:bridge.companyInstanceId||bridge.instanceId||''}:null,companyInstanceId:companyIdOf(state),lastSave:localStorage.getItem(LAST_SAVE)||''};},
     disconnect(){const u=Auth.cached(),root=rootId();if(u)localStorage.removeItem(rootKey(u.sub));if(root)localStorage.removeItem(structKey(root));for(let i=localStorage.length-1;i>=0;i--){const key=localStorage.key(i)||'';if(key.startsWith('marco_iris_v240_'))localStorage.removeItem(key);}this.currentFile=null;structurePromise=null;connectionPromise=null;integrationFileIds.clear();integrationFilePromises.clear();dataFilePromises.clear();saveQueueRequested=saveQueueCompleted=0;saveQueueState=null;saveQueueOptions={};saveQueueWaiters=[];Auth.signOut();},
-    __test:{applyConfirmedState,prepareOfficialState,assertSafeReplacement,validateOfficialState,decideOfficialSource,writeRotatingBackup,enqueueSave,flushSaveQueue}
+    __test:{applyConfirmedState,prepareOfficialState,assertSafeReplacement,validateOfficialState,decideOfficialSource,explicitLocalDeletionCoverage,writeRotatingBackup,enqueueSave,flushSaveQueue}
   };
   window.GoogleDriveMarco=Drive;
 })();

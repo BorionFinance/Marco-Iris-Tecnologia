@@ -5,8 +5,8 @@
      Segurança: identidade de empresa compartilhada, identidade de dispositivo,
      bloqueio de publicação antes da carga oficial e proteção contra snapshot vazio. */
   const SPEC = Object.freeze({
-    schema: 'borion.interop.snapshot', schemaVersion: 2, bridgeVersion: '3.0.0',
-    sourceAppId: 'marco-iris', sourceAppName: 'Marco Iris Tecnologia', sourceAppVersion: '2.4.0',
+    schema: 'borion.interop.snapshot', schemaVersion: 2, bridgeVersion: '3.0.1',
+    sourceAppId: 'marco-iris', sourceAppName: 'Marco Iris Tecnologia', sourceAppVersion: '2.4.1',
     targetProfileAlias: 'default', snapshotFile: 'marco-iris.bridge.json', ackFile: 'marco-iris.ack.json',
     integrationFolder: 'Borion_Integracoes'
   });
@@ -96,7 +96,7 @@
   function reconcileState(state){
     const bridge=ensureBridgeState(state),records=projectRecords(state),current=new Map(records.map(r=>[r.sourceRecordId,r])),previous=bridge.shadow||{};
     const tombstoneMap=new Map((bridge.tombstones||[]).map(t=>[String(t.sourceRecordId||t.aggregateId),t]));
-    Object.keys(previous).forEach(id=>{if(!current.has(id))tombstoneMap.set(id,{sourceRecordId:id,aggregateId:id,operationType:'delete',deletedAt:nowIso(),deviceId:bridge.deviceId,revision:bridge.revision+1,reason:'source-record-removed'});});
+    Object.keys(previous).forEach(id=>{if(!current.has(id)){const parts=String(id).split(':'),kind=parts[1]||'receipt',entityId=parts.slice(2).join(':')||parts[parts.length-1]||id,aggregateId=`${SPEC.sourceAppId}:${bridge.companyInstanceId}:${kind}:${entityId}`;tombstoneMap.set(id,{sourceRecordId:id,aggregateId,entityId,operationType:'delete',deletedAt:nowIso(),deviceId:bridge.deviceId,revision:bridge.revision+1,reason:'source-record-removed'});}});
     current.forEach((_r,id)=>tombstoneMap.delete(id));bridge.shadow=Object.fromEntries(records.map(r=>[r.sourceRecordId,r.fingerprint]));
     const cutoff=Date.now()-366*24*60*60*1000;bridge.tombstones=[...tombstoneMap.values()].filter(x=>!x.deletedAt||new Date(x.deletedAt).getTime()>=cutoff).sort((a,b)=>String(a.sourceRecordId||a.aggregateId).localeCompare(String(b.sourceRecordId||b.aggregateId))).slice(-4000);
     const content={companyInstanceId:bridge.companyInstanceId,records,tombstones:bridge.tombstones};const contentHash=hash(content);
@@ -113,11 +113,19 @@
   function validateCandidateAgainstRemote(candidate,remote){
     if(!remote)return {ok:true};const localCompany=snapshotCompany(candidate),remoteCompany=snapshotCompany(remote);
     if(remoteCompany&&localCompany!==remoteCompany)return {ok:false,code:'INSTANCE_CONFLICT',message:'A origem oficial da integração é diferente. A publicação foi bloqueada.'};
-    const rr=Math.max(0,Number(remote.revision)||0),lr=Math.max(0,Number(candidate.revision)||0),remoteCount=Number(remote.recordCount??remote.records?.length??0),localCount=Number(candidate.recordCount??candidate.records?.length??0);
-    if(remoteCount>0&&localCount===0)return {ok:false,code:'EMPTY_BASE_BLOCKED',message:'A base local está vazia, mas o Google Drive contém dados. A publicação foi bloqueada para evitar perda de informações.'};
-    const explicitDeletes=(candidate.tombstones||[]).length;if(remoteCount>=4&&localCount<Math.ceil(remoteCount*.5)&&explicitDeletes<remoteCount-localCount)return {ok:false,code:'SUSPICIOUS_DROP',message:'Redução anormal de registros sem exclusões explícitas. Publicação bloqueada.'};
-    if(rr>lr&&remote.contentHash!==candidate.contentHash)return {ok:false,code:'REMOTE_NEWER',message:'O Google Drive possui uma revisão mais nova. Baixe e reconcilie os dados antes de publicar.'};
-    return {ok:true,sameContent:remoteCompany===localCompany&&remote.contentHash===candidate.contentHash};
+    const rr=Math.max(0,Number(remote.revision)||0),lr=Math.max(0,Number(candidate.revision)||0),remoteRecords=Array.isArray(remote.records)?remote.records:[],candidateRecords=Array.isArray(candidate.records)?candidate.records:[],remoteCount=Number(remote.recordCount??remoteRecords.length??0),localCount=Number(candidate.recordCount??candidateRecords.length??0);
+    const tombstoneKeys=new Set((candidate.tombstones||[]).flatMap(item=>[String(item?.sourceRecordId||''),String(item?.aggregateId||''),String(item?.entityId||'')]).filter(Boolean));
+    const candidateKeys=new Set(candidateRecords.flatMap(item=>[String(item?.sourceRecordId||''),String(item?.aggregateId||''),String(item?.entityId||'')]).filter(Boolean));
+    const removedRemote=remoteRecords.filter(item=>{const keys=[String(item?.sourceRecordId||''),String(item?.aggregateId||''),String(item?.entityId||'')].filter(Boolean);return keys.length&&!keys.some(key=>candidateKeys.has(key));});
+    const explicitDeletionCoverage=removedRemote.length>0&&removedRemote.every(item=>[String(item?.sourceRecordId||''),String(item?.aggregateId||''),String(item?.entityId||'')].filter(Boolean).some(key=>tombstoneKeys.has(key)));
+    if(remoteCount>0&&localCount===0&&!explicitDeletionCoverage)return {ok:false,code:'EMPTY_BASE_BLOCKED',message:'A base local está vazia, mas o Google Drive contém dados e não há exclusões explícitas suficientes. A publicação foi bloqueada.'};
+    if(remoteCount>=4&&localCount<Math.ceil(remoteCount*.5)&&!explicitDeletionCoverage)return {ok:false,code:'SUSPICIOUS_DROP',message:'Redução anormal de registros sem exclusões explícitas. Publicação bloqueada.'};
+    /* O bridge é um artefato derivado da base oficial. A revisão do bridge pode ficar
+       à frente da revisão gravada dentro do current principal após uma aba ser fechada
+       entre duas confirmações. Para a mesma empresa, um snapshot completo vindo da base
+       oficial pode substituir o bridge antigo; a concorrência real continua protegida
+       pelo arquivo principal do Drive. */
+    return {ok:true,sameContent:remoteCompany===localCompany&&remote.contentHash===candidate.contentHash,remoteRevision:rr,localRevision:lr,explicitDeletionCoverage};
   }
 
   function applyAcknowledgement(state,ack){
@@ -170,12 +178,13 @@
     if(delay>0)timer=setTimeout(()=>runPublishLoop().catch(e=>console.warn('[BORION_INTEROP_SOURCE] Falha ao publicar:',e)),delay);else runPublishLoop().catch(()=>{});
     return promise;
   }
+  function prepareState(state){return reconcileState(state||(stateGetter&&stateGetter()));}
   async function publish(state,options={}){return await requestPublish(state,{delay:0,forceAfterValidation:!!options.forceAfterValidation});}
   function schedule(state,delay=140){if(!state||!canPublish())return false;publishState=state;++publishRequested;clearTimeout(timer);timer=setTimeout(()=>runPublishLoop().catch(e=>console.warn('[BORION_INTEROP_SOURCE] Falha ao publicar:',e)),delay);return true;}
   function start(getter){if(typeof getter==='function')stateGetter=getter;if(runtime.started)return getRuntimeStatus();runtime.started=true;runtime.status='waiting-authentication';runtime.reason='Aguardando autenticação e carga da base oficial.';const tick=()=>{const state=stateGetter?stateGetter():null;if(state&&canPublish())schedule(state,20);};interval=setInterval(tick,5000);if(typeof document!=='undefined')document.addEventListener('visibilitychange',()=>{if(!document.hidden)tick();});if(typeof window!=='undefined'&&window.addEventListener){window.addEventListener('online',tick);window.addEventListener('pagehide',tick);}return getRuntimeStatus();}
   function stop(){clearTimeout(timer);clearInterval(interval);runtime.started=false;runtime.ready=false;runtime.initialSyncComplete=false;runtime.status='stopped';runtime.reason='Integração parada.';publishRequested=publishCompleted=0;publishState=null;publishWaiters=[];}
 
-  window.MarcoBorionInterop=Object.freeze({spec:SPEC,start,stop,schedule,publish,setReady,setNotReady,pause,resume,getRuntimeStatus,
+  window.MarcoBorionInterop=Object.freeze({spec:SPEC,start,stop,schedule,publish,prepareState,setReady,setNotReady,pause,resume,getRuntimeStatus,
     forceSync:state=>publish(state||(stateGetter&&stateGetter()),{forceAfterValidation:canPublish()}),getStatus(state){return clone(ensureBridgeState(state||(stateGetter&&stateGetter())));},
     __test:{hash,stableStringify,projectRecord,projectRecords,reconcileState,applyAcknowledgement,statusCode,paymentMethodLabel,validateCandidateAgainstRemote,ensureBridgeState,getDeviceId,canPublish,setReady,setNotReady,pause,resume,getRuntimeStatus,countSourceRecords,runPublishLoop,requestPublish,publishOnce}
   });
