@@ -1,0 +1,14 @@
+'use strict';
+const fs=require('fs'),path=require('path');
+const assert=(c,m)=>{if(!c)throw new Error('FALHOU: '+m)};
+const read=f=>fs.readFileSync(path.resolve(__dirname,'..',f),'utf8');
+const storage=read('js/services/storage.js'),drive=read('js/services/google-drive.js'),app=read('js/app.js'),sw=read('sw.js'),manifest=JSON.parse(read('manifest.json')),cname=read('CNAME').trim();
+assert(storage.includes("marco_iris_tecnologia_db_v240_clean"),'a instalação nova precisa de banco IndexedDB novo');
+assert(storage.includes('indexedDB.deleteDatabase(DB)')&&storage.includes('wipeAll'),'reset deve apagar o banco completo');
+assert(drive.includes('marco_iris_v240_gdrive_root_')&&drive.includes('marco_iris_v240_gdrive_structure_'),'IDs antigos de Drive não podem ser herdados');
+assert(drive.includes("Marco_Iris_Instalacao.json")&&drive.includes("appVersion:'2.4.0'"),'Drive deve receber manifesto da instalação');
+assert(sw.includes('marco-iris-v2.4.0-reinstalacao-limpa-drive'),'service worker deve usar cache isolado');
+assert(manifest.version==='2.4.0','manifest precisa estar na versão 2.4.0');
+assert(cname==='mitec.boreonfinds.com.br','CNAME deve usar a URL informada para a reinstalação');
+assert(app.includes('GoogleDriveMarco.diagnose(STATE)')&&app.includes('marco-iris.bridge.json'),'login e conexão devem confirmar base e bridge antes de liberar');
+console.log('OK: instalação v2.4.0 usa banco, cache, chaves do Drive, manifesto e CNAME novos, sem herdar referências antigas.');

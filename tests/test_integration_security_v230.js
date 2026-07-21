@@ -1,0 +1,35 @@
+'use strict';
+const fs=require('fs'),vm=require('vm'),path=require('path');
+function assert(c,m){if(!c)throw new Error('FALHOU: '+m);}
+(async()=>{
+  const store=new Map([['marco_iris_device_id_v240_clean','device-test-a']]);
+  const context={console,setTimeout,clearTimeout,setInterval:()=>1,clearInterval,crypto:global.crypto,Blob,TextEncoder};
+  context.window=context;context.globalThis=context;context.localStorage={getItem:k=>store.get(k)||null,setItem:(k,v)=>store.set(k,String(v))};
+  context.document={hidden:false,addEventListener(){}};context.addEventListener=()=>{};
+  context.MarcoStorage={save:async()=>{},getFolderHandle:async()=>null};
+  context.GoogleDriveMarco={isConfigured:()=>false};
+  vm.createContext(context);vm.runInContext(fs.readFileSync(path.join(__dirname,'../js/services/borion-interop-source.js'),'utf8'),context);
+  const api=context.MarcoBorionInterop,test=api.__test;
+  const state={activeProfileId:'p1',profiles:[{id:'p1'}],dataByProfile:{p1:{clients:[],serviceOrders:[],payments:[{id:'p1',code:'REC-1',type:'Receita',value:10,paymentDate:'2026-07-21',status:'Pago',paymentMethod:'Pix'}]}}};
+  api.start(()=>state);
+  const blocked=await api.publish(state);
+  assert(blocked&&blocked.code==='INITIAL_SYNC_REQUIRED','publicador deve ficar bloqueado antes da sincronização inicial');
+  api.setReady(state);
+  const snap=test.reconcileState(state);
+  assert(snap.schemaVersion===2&&snap.companyInstanceId&&snap.instanceId===snap.companyInstanceId,'snapshot deve separar e preservar a identidade oficial da empresa');
+  assert(snap.deviceId==='device-test-a'&&snap.recordCount===1&&snap.isCompleteSnapshot===true,'snapshot deve identificar dispositivo, contagem e completude');
+  assert(snap.records[0].sourceRecordId==='marco:receipt:REC-1'&&snap.records[0].idempotencyKey==='marco:receipt:REC-1','registro deve ter chave de idempotência estável');
+  const empty=Object.assign({},snap,{revision:snap.revision+1,recordCount:0,records:[],contentHash:'empty'});
+  const emptyGuard=test.validateCandidateAgainstRemote(empty,snap);
+  assert(!emptyGuard.ok&&emptyGuard.code==='EMPTY_BASE_BLOCKED','base vazia não pode sobrescrever bridge válido');
+  const foreign=Object.assign({},snap,{companyInstanceId:'foreign',instanceId:'foreign',revision:snap.revision+1});
+  const foreignGuard=test.validateCandidateAgainstRemote(foreign,snap);
+  assert(!foreignGuard.ok&&foreignGuard.code==='INSTANCE_CONFLICT','outra instância não pode sobrescrever a oficial');
+  const sameGuard=test.validateCandidateAgainstRemote(snap,snap);
+  assert(sameGuard.ok&&sameGuard.sameContent,'conteúdo idêntico deve ser reconhecido sem republicação');
+  state.interconnections.borion.recordAcks={'legacy':{result:'imported'}};
+  const ack={schema:'borion.interop.ack',sourceAppId:'marco-iris',companyInstanceId:snap.companyInstanceId,sourceRevision:snap.revision,processedAt:'2026-07-21T00:00:00Z',records:[{sourceRecordId:'marco:receipt:REC-1',entityId:'REC-1',result:'already_processed'}]};
+  assert(test.applyAcknowledgement(state,ack),'ACK oficial deve ser aceito');
+  assert(state.interconnections.borion.recordAcks.legacy&&state.interconnections.borion.recordAcks['marco:receipt:REC-1'],'ACK por registro não pode apagar histórico anterior');
+  console.log('OK: publisher bloqueado até a base oficial, instância vazia/estranha rejeitada e ACK idempotente preservado.');
+})().catch(e=>{console.error(e);process.exit(1)});

@@ -1,0 +1,11 @@
+'use strict';
+const fs=require('fs'),path=require('path');
+const assert=(c,m)=>{if(!c)throw new Error('FALHOU: '+m)};
+const drive=fs.readFileSync(path.resolve(__dirname,'../js/services/google-drive.js'),'utf8');
+const app=fs.readFileSync(path.resolve(__dirname,'../js/app.js'),'utf8');
+assert(/AUTOSAVE_SLOTS=20/.test(drive)&&/FORCESAVE_SLOTS=20/.test(drive),'Drive precisa limitar autosaves e forcesaves a 20 slots');
+assert(/`\$\{kind\}-\$\{slot\}\.json`/.test(drive),'nomes devem ser autosave-1.json, autosave-2.json etc.');
+assert(!/Marco_Iris_prewrite_/.test(drive),'não pode criar backups prewrite infinitos a cada alteração');
+assert(/writeAutosave\(STATE,\{force:false\}\)/.test(app),'rotação automática deve escrever os slots do Drive a cada minuto quando houve mudança');
+assert(/flushCloudState\('manual',\{backup:true/.test(app),'salvamento manual deve gerar forcesave e cópia de segurança');
+console.log('OK: backups do Drive usam rotação limitada autosave-1…20 e forcesave-1…20, sem crescimento infinito.');

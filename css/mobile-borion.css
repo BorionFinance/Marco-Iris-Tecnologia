@@ -1,0 +1,783 @@
+/* Marco Iris Tecnologia v2.2.0
+   Camada mobile refeita com o comportamento estável da Amanda Estética:
+   uma única rolagem vertical, menu lateral com scrim, bottom sheets e safe areas. */
+
+:root{
+  --marco-app-vh:100svh;
+  --marco-modal-vh:100dvh;
+  --marco-keyboard:0px;
+  --marco-mobile-nav-height:76px;
+  --marco-touch:48px;
+}
+
+html{
+  min-height:100%;
+  -webkit-text-size-adjust:100%;
+  text-size-adjust:100%;
+  background:#03172f;
+  overscroll-behavior-y:none;
+}
+body{
+  min-height:100%;
+  overflow-x:hidden;
+  overscroll-behavior-y:none;
+  -webkit-tap-highlight-color:transparent;
+}
+button,a,input,select,textarea{touch-action:manipulation}
+input,select,textarea{font-size:16px}
+
+.marco-network-banner{
+  position:fixed;
+  left:50%;
+  top:max(12px,env(safe-area-inset-top));
+  z-index:10020;
+  display:grid;
+  grid-template-columns:auto 1fr;
+  gap:1px 10px;
+  width:min(calc(100vw - 28px),440px);
+  padding:11px 14px;
+  border-radius:16px;
+  border:1px solid rgba(127,188,249,.18);
+  background:rgba(5,30,59,.96);
+  color:#eff8ff;
+  box-shadow:0 20px 46px rgba(0,8,22,.38);
+  transform:translate3d(-50%,-140%,0);
+  opacity:0;
+  pointer-events:none;
+  transition:transform .24s cubic-bezier(.22,.8,.25,1),opacity .2s ease;
+  backdrop-filter:blur(14px) saturate(120%);
+}
+.marco-network-banner.is-visible{transform:translate3d(-50%,0,0);opacity:1}
+.marco-network-banner .network-dot{grid-row:1/3;align-self:center;width:10px;height:10px;border-radius:50%;background:#ff9a4f;box-shadow:0 0 0 5px rgba(255,154,79,.13)}
+.marco-network-banner.is-online .network-dot{background:#47d89a;box-shadow:0 0 0 5px rgba(71,216,154,.13)}
+.marco-network-banner strong{font-size:13px;line-height:1.2}
+.marco-network-banner small{font-size:11px;color:rgba(216,235,253,.68)}
+
+.mobile-sheet-handle{
+  display:none;
+  width:100%;
+  min-height:26px;
+  padding:9px 0 6px;
+  margin:0;
+  border:0;
+  background:transparent;
+  cursor:grab;
+  touch-action:none;
+}
+.mobile-sheet-handle span{display:block;width:42px;height:5px;margin:auto;border-radius:999px;background:rgba(176,213,246,.28)}
+.mobile-sheet-handle:active{cursor:grabbing}
+.is-touching{transform:scale(.975)!important;transition-duration:70ms!important}
+.sidebar-scrim{display:none}
+
+/* A barra inferior existe somente no layout compacto.
+   Esta regra base evita que ela permaneça visível ao ampliar a janela para desktop. */
+.mobile-bottom-nav{display:none!important}
+
+/* A tela animada original permanece. No celular, o acesso vem primeiro e as informações ficam abaixo. */
+.lock-network-canvas,.lock-orb,.login-screen::before,.login-screen::after{pointer-events:none!important}
+
+@media(max-width:900px){
+  :root{--marco-mobile-nav-height:76px}
+
+  html.marco-mobile-ui,
+  html.marco-mobile-ui body{
+    width:100%;
+    min-height:100%;
+    overflow-x:hidden!important;
+  }
+
+  body:not(.login-page):not(.modal-open):not(.menu-open){
+    overflow-y:auto!important;
+    touch-action:pan-y pinch-zoom!important;
+    -webkit-overflow-scrolling:touch;
+  }
+  body.modal-open,
+  body.menu-open{overflow:hidden!important}
+  body.modal-open #root{pointer-events:none;user-select:none}
+
+  .app-bg{
+    min-height:var(--marco-app-vh)!important;
+    overflow:visible!important;
+  }
+  .app-shell{
+    display:block!important;
+    min-height:var(--marco-app-vh)!important;
+    overflow:visible!important;
+  }
+  .main{
+    display:block!important;
+    width:100%!important;
+    min-width:0!important;
+    min-height:var(--marco-app-vh)!important;
+    overflow:visible!important;
+    padding-bottom:calc(var(--marco-mobile-nav-height) + 22px + env(safe-area-inset-bottom))!important;
+    scroll-padding-top:84px;
+    scroll-padding-bottom:calc(var(--marco-mobile-nav-height) + 30px + env(safe-area-inset-bottom));
+  }
+  .content{
+    width:100%!important;
+    min-width:0!important;
+    max-width:100%!important;
+    overflow:visible!important;
+    padding:14px 12px calc(var(--marco-mobile-nav-height) + 34px + env(safe-area-inset-bottom))!important;
+  }
+  #view-root{
+    width:100%!important;
+    min-width:0!important;
+    overflow:visible!important;
+    transform:none!important;
+  }
+
+  /* Drawer igual ao comportamento estável da Amanda. */
+  .sidebar{
+    position:fixed!important;
+    inset:0 auto 0 0!important;
+    z-index:92!important;
+    width:min(290px,84vw)!important;
+    height:var(--marco-modal-vh)!important;
+    min-height:0!important;
+    max-height:none!important;
+    padding-top:max(16px,env(safe-area-inset-top))!important;
+    padding-bottom:max(16px,env(safe-area-inset-bottom))!important;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+    overscroll-behavior:contain!important;
+    touch-action:pan-y!important;
+    -webkit-overflow-scrolling:touch;
+    transform:translate3d(-104%,0,0)!important;
+    transition:transform .22s cubic-bezier(.22,.8,.25,1)!important;
+    box-shadow:20px 0 60px rgba(0,0,0,.34)!important;
+  }
+  body.menu-open .sidebar{transform:translate3d(0,0,0)!important}
+  .sidebar-scrim{
+    position:fixed;
+    inset:0;
+    z-index:90;
+    display:block;
+    border:0;
+    padding:0;
+    background:rgba(0,8,22,.48);
+    opacity:0;
+    pointer-events:none;
+    transition:opacity .18s ease;
+    touch-action:none;
+  }
+  body.menu-open .sidebar-scrim{opacity:1;pointer-events:auto}
+  .sidebar .nav-btn{min-height:48px!important}
+  .sidebar-footer{padding-bottom:calc(12px + env(safe-area-inset-bottom))!important}
+
+  .topbar{
+    position:sticky!important;
+    top:0!important;
+    z-index:55!important;
+    width:100%!important;
+    min-height:calc(64px + env(safe-area-inset-top))!important;
+    padding:max(8px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) 8px max(10px,env(safe-area-inset-left))!important;
+    gap:8px!important;
+  }
+  .mobile-menu{display:grid!important;flex:0 0 var(--marco-touch)}
+  .topbar .icon-btn,.mobile-bottom-nav button{min-width:var(--marco-touch);min-height:var(--marco-touch)}
+  .view-heading{flex:1 1 auto!important;min-width:0!important}
+  .view-heading h1{font-size:1.02rem!important;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .view-heading small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.72rem!important}
+  .global-search{display:none!important}
+  .top-actions{flex:0 0 auto!important;gap:6px!important}
+  .top-actions .desktop-only{display:none!important}
+  .top-actions .icon-btn{width:44px!important;height:44px!important}
+
+  .mobile-bottom-nav{
+    position:fixed!important;
+    left:0!important;
+    right:0!important;
+    bottom:0!important;
+    z-index:85!important;
+    display:grid!important;
+    grid-template-columns:repeat(5,minmax(0,1fr))!important;
+    align-items:start!important;
+    min-height:calc(var(--marco-mobile-nav-height) + env(safe-area-inset-bottom))!important;
+    padding:7px max(8px,env(safe-area-inset-right)) max(7px,env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left))!important;
+    border-top:1px solid rgba(120,183,244,.13)!important;
+    background:linear-gradient(180deg,rgba(5,35,68,.96),rgba(3,23,47,.995))!important;
+    box-shadow:0 -14px 38px rgba(0,7,20,.34)!important;
+    backdrop-filter:blur(18px) saturate(125%)!important;
+    -webkit-backdrop-filter:blur(18px) saturate(125%)!important;
+    transform:none!important;
+  }
+  .mobile-bottom-nav button{
+    position:relative;
+    display:flex!important;
+    flex-direction:column!important;
+    align-items:center!important;
+    justify-content:center!important;
+    gap:3px!important;
+    min-width:0!important;
+    padding:5px 2px!important;
+    border:0!important;
+    border-radius:15px!important;
+    background:transparent!important;
+    color:#91abc4!important;
+    font:600 10px/1 inherit!important;
+    transform:none!important;
+  }
+  .mobile-bottom-nav button::before{
+    content:"";
+    position:absolute;
+    inset:2px 7px;
+    border-radius:13px;
+    background:linear-gradient(145deg,rgba(45,135,229,.24),rgba(27,91,160,.14));
+    opacity:0;
+    transform:scale(.75);
+    transition:opacity .18s ease,transform .22s cubic-bezier(.2,.8,.25,1);
+  }
+  .mobile-bottom-nav button>*{position:relative;z-index:1}
+  .mobile-bottom-nav button.active{color:#82c2ff!important}
+  .mobile-bottom-nav button.active::before{opacity:1;transform:scale(1)}
+  .mobile-bottom-nav button svg{width:22px;height:22px}
+
+  #toast-root{bottom:calc(var(--marco-mobile-nav-height) + 18px + env(safe-area-inset-bottom))!important}
+
+  /* Estrutura de conteúdo sem largura fantasma e sem cortes. */
+  .grid.kpis,.grid.two,.grid.three{grid-template-columns:1fr!important}
+  .hero{min-height:0!important;padding:20px!important;border-radius:22px!important}
+  .hero-content{display:grid!important;grid-template-columns:1fr!important;gap:18px!important;align-items:start!important}
+  .hero-clock{text-align:left!important}
+  .hero-clock strong{font-size:2.7rem!important}
+  .card{min-width:0!important;padding:16px!important;border-radius:19px!important}
+  .toolbar,.toolbar-left,.toolbar-right,.card-header,.section-head{min-width:0;flex-wrap:wrap!important}
+  .toolbar-left,.toolbar-right{width:100%!important}
+  .toolbar .btn,.toolbar-left .btn,.toolbar-right .btn{min-height:44px;flex:1 1 auto}
+  .tabs{max-width:100%!important;overflow-x:auto!important;-webkit-overflow-scrolling:touch}
+  .table-wrap{width:100%!important;max-width:100%!important;overflow-x:auto!important;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
+  .list-row{min-width:0!important}
+  .list-row-main{min-width:0!important}
+  .list-row-main strong,.list-row-main small{overflow-wrap:anywhere}
+  .item-editor-row,.payment-editor-row{grid-template-columns:1fr!important}
+  .media-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .cloud-folders{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .calendar-day-panel{position:static!important;max-height:none!important}
+  .google-calendar{overflow-x:auto!important;-webkit-overflow-scrolling:touch}
+
+  /* Bottom sheet: o fundo fica parado e somente o conteúdo da janela rola. */
+  .modal-backdrop.mobile-sheet-backdrop{
+    align-items:flex-end!important;
+    justify-content:center!important;
+    padding:max(12px,env(safe-area-inset-top)) 0 0!important;
+    background:rgba(0,8,22,var(--sheet-overlay-opacity,.54))!important;
+    overscroll-behavior:contain!important;
+    touch-action:pan-y!important;
+  }
+  .modal-backdrop.mobile-sheet-backdrop .modal.mobile-bottom-sheet{
+    width:100%!important;
+    max-width:none!important;
+    max-height:calc(var(--marco-modal-vh) - max(12px,env(safe-area-inset-top)))!important;
+    margin:0!important;
+    border-radius:25px 25px 0 0!important;
+    border-bottom:0!important;
+    transform:translate3d(0,var(--sheet-y,22px),0)!important;
+    transform-origin:50% 100%!important;
+    overflow:hidden!important;
+    display:flex!important;
+    flex-direction:column!important;
+    will-change:transform;
+    touch-action:pan-y!important;
+  }
+  .modal-backdrop.is-open.mobile-sheet-backdrop .modal.mobile-bottom-sheet{transform:translate3d(0,var(--sheet-y,0),0)!important}
+  .mobile-bottom-sheet.is-sheet-dragging{transition:none!important}
+  .mobile-bottom-sheet.is-sheet-closing{transition:transform .18s ease!important}
+  .mobile-bottom-sheet>.mobile-sheet-handle{display:block;flex:0 0 auto;background:rgba(3,23,47,.98)}
+  .mobile-bottom-sheet>.modal-header{
+    position:relative!important;
+    top:auto!important;
+    flex:0 0 auto!important;
+    padding-top:7px!important;
+    padding-left:max(16px,env(safe-area-inset-left))!important;
+    padding-right:max(12px,env(safe-area-inset-right))!important;
+  }
+  .mobile-bottom-sheet>.modal-body{
+    flex:1 1 auto!important;
+    min-height:0!important;
+    max-height:none!important;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+    -webkit-overflow-scrolling:touch!important;
+    overscroll-behavior:contain!important;
+    touch-action:pan-y!important;
+    padding-left:max(14px,env(safe-area-inset-left))!important;
+    padding-right:max(14px,env(safe-area-inset-right))!important;
+    padding-bottom:max(18px,env(safe-area-inset-bottom))!important;
+    scroll-padding-bottom:96px;
+  }
+  .mobile-bottom-sheet .form-actions{
+    position:sticky!important;
+    bottom:-1px!important;
+    z-index:4!important;
+    display:grid!important;
+    grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr)!important;
+    gap:9px!important;
+    margin:16px -14px -18px!important;
+    padding:12px max(14px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left))!important;
+    border-top:1px solid rgba(132,195,255,.13)!important;
+    background:linear-gradient(180deg,rgba(5,35,68,.95),rgba(3,23,47,.995))!important;
+    backdrop-filter:blur(14px);
+  }
+  .mobile-bottom-sheet .form-actions .btn{min-height:48px!important;justify-content:center!important}
+  .modal-body .form-grid,.modal-body .grid,.modal-body .detail-grid{grid-template-columns:1fr!important}
+  .modal-body input,.modal-body select,.modal-body textarea{font-size:16px!important;min-height:48px}
+  .modal-body textarea{min-height:100px}
+
+  body.keyboard-open .mobile-bottom-nav,
+
+  body.keyboard-open .mobile-bottom-sheet .form-actions{padding-bottom:12px!important}
+
+  /* Com o teclado aberto, o rodapé de ações (Salvar/Cancelar/Gerar PDF etc.) some
+     para não sobrepor o campo em edição; reaparece ao fechar o teclado. */
+  body.keyboard-open .modal .form-actions,
+  body.keyboard-open .modal .sticky-actions{
+    transform:translateY(100%)!important;
+    opacity:0!important;
+    pointer-events:none!important;
+    transition:transform .16s ease,opacity .16s ease!important;
+  }
+  body.keyboard-open .mobile-bottom-sheet>.modal-body{
+    padding-bottom:max(18px,env(safe-area-inset-bottom))!important;
+    scroll-padding-bottom:24px!important;
+  }
+
+  /* Login mobile: acesso à vista, apresentação abaixo. */
+  body.login-page{
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+    touch-action:pan-y pinch-zoom!important;
+    -webkit-overflow-scrolling:touch;
+  }
+  body.login-page #root,
+  body.login-page .login-screen{
+    min-height:100svh!important;
+    height:auto!important;
+    overflow:visible!important;
+    touch-action:pan-y pinch-zoom!important;
+  }
+  body.login-page .login-screen{
+    display:block!important;
+    padding:max(58px,calc(env(safe-area-inset-top) + 48px)) 14px 26px!important;
+  }
+  body.login-page .lock-shell{
+    width:100%!important;
+    max-width:760px!important;
+    margin:0 auto!important;
+    display:flex!important;
+    flex-direction:column!important;
+    gap:20px!important;
+    align-items:stretch!important;
+  }
+  body.login-page .login-card{
+    order:1!important;
+    width:100%!important;
+    max-width:none!important;
+    margin:0!important;
+    padding:20px!important;
+    border-radius:24px!important;
+  }
+  body.login-page .login-brand{margin-bottom:14px!important}
+  body.login-page .login-brand .user-badge{width:72px!important;height:72px!important;margin:0 auto 10px!important}
+  body.login-page .login-brand h1{font-size:1.62rem!important}
+  body.login-page .login-brand p{font-size:.88rem!important;margin-top:6px!important}
+  body.login-page .profile-option{padding:12px!important}
+  body.login-page .login-aux{margin:10px 0!important;font-size:.76rem!important}
+  body.login-page .login-enter{min-height:50px!important}
+  body.login-page .login-security-note{font-size:.72rem!important;margin:12px auto 0!important;line-height:1.45!important}
+  body.login-page .lock-brand-panel{
+    order:2!important;
+    width:100%!important;
+    max-width:none!important;
+    margin:0!important;
+    padding:18px 4px 0!important;
+  }
+  body.login-page .lock-brand-top{gap:12px!important;margin-bottom:10px!important;align-items:center!important}
+  body.login-page .lock-brand-top img{width:62px!important;height:52px!important}
+  body.login-page .lock-title{font-size:2rem!important}
+  body.login-page .lock-subtitle{font-size:.82rem!important}
+  body.login-page .lock-tagline{font-size:.94rem!important;margin-top:8px!important}
+  body.login-page .lock-feature-row{grid-template-columns:1fr!important;gap:9px!important;margin-top:16px!important}
+  body.login-page .lock-feature,
+  body.login-page .lock-feature + .lock-feature{padding:11px 12px!important;border-radius:15px!important}
+  body.login-page .lock-feature-icon{width:38px!important;height:38px!important;border-radius:12px!important}
+  body.login-page .lock-feature strong{font-size:.87rem!important}
+  body.login-page .lock-feature small{font-size:.75rem!important;line-height:1.38!important}
+  body.login-page .lock-footer{
+    position:relative!important;
+    inset:auto!important;
+    width:min(100%,760px)!important;
+    margin:18px auto 0!important;
+    padding:0!important;
+  }
+  body.login-page .lock-footer-cards{display:none!important}
+  body.login-page .lock-footer-meta{display:flex!important;justify-content:space-between!important;gap:12px!important;text-align:left!important;font-size:.72rem!important}
+}
+
+@media(min-width:601px) and (max-width:1000px) and (pointer:coarse){
+  .modal-backdrop.mobile-sheet-backdrop{padding:24px 18px max(18px,env(safe-area-inset-bottom))!important}
+  .modal-backdrop.mobile-sheet-backdrop .modal.mobile-bottom-sheet{
+    width:min(100%,800px)!important;
+    border-radius:26px!important;
+    border-bottom:1px solid rgba(132,195,255,.14)!important;
+  }
+  body.login-page .login-card{max-width:620px!important;align-self:center!important}
+}
+
+@media(max-width:430px){
+  .top-actions .lock-top-btn{display:none!important}
+  .content{padding-left:10px!important;padding-right:10px!important}
+  .media-grid,.cloud-folders{grid-template-columns:1fr!important}
+  .mobile-bottom-sheet .form-actions{grid-template-columns:1fr 1.15fr!important}
+}
+
+@media(prefers-reduced-motion:reduce){
+  .marco-network-banner,.mobile-bottom-nav button::before,.mobile-bottom-sheet,.is-touching,.sidebar,.sidebar-scrim{transition:none!important}
+}
+
+
+/* v2.1.3 — medidas mobile alinhadas à Amanda: um único scroll e rodapé alcançável. */
+body.login-page .lock-shell > .lock-feature-row{
+  grid-column:1 / -1;
+  width:100%;
+  max-width:1440px;
+  margin:0 auto;
+  grid-template-columns:repeat(3,minmax(0,1fr))!important;
+}
+
+@media(max-width:900px){
+  /* O HTML é o único contêiner vertical rolável. Nenhum painel interno disputa o gesto. */
+  html.marco-mobile-ui{
+    width:100%!important;
+    height:100%!important;
+    min-height:100%!important;
+    overflow-x:hidden!important;
+    overflow-y:auto!important;
+    overscroll-behavior-y:none!important;
+    touch-action:pan-y pinch-zoom!important;
+    -webkit-overflow-scrolling:touch;
+    scroll-behavior:auto!important;
+  }
+  html.marco-mobile-ui body,
+  html.marco-mobile-ui body.login-page,
+  html.marco-mobile-ui body:not(.login-page):not(.modal-open):not(.menu-open){
+    position:static!important;
+    width:100%!important;
+    height:auto!important;
+    min-height:100%!important;
+    overflow-x:clip!important;
+    overflow-y:visible!important;
+    overscroll-behavior-y:auto!important;
+    touch-action:pan-y pinch-zoom!important;
+  }
+  html.marco-mobile-ui.marco-scroll-locked{
+    overflow:hidden!important;
+    touch-action:none!important;
+  }
+  html.marco-mobile-ui.marco-scroll-locked body{
+    overflow:hidden!important;
+  }
+
+  /* Tela de entrada: mesma largura útil, respiros e fluxo vertical da Amanda. */
+  body.login-page #root,
+  body.login-page .login-screen,
+  body.login-page .lock-shell,
+  body.login-page .lock-brand-panel,
+  body.login-page .login-card,
+  body.login-page .lock-feature-row,
+  body.login-page .lock-footer{
+    height:auto!important;
+    max-height:none!important;
+    overflow:visible!important;
+  }
+  body.login-page #root{
+    width:100%!important;
+    min-height:100%!important;
+  }
+  body.login-page .login-screen{
+    box-sizing:border-box!important;
+    width:100%!important;
+    min-height:100svh!important;
+    display:flex!important;
+    flex-direction:column!important;
+    align-items:stretch!important;
+    justify-content:flex-start!important;
+    gap:0!important;
+    padding:max(48px,calc(env(safe-area-inset-top) + 42px)) 16px max(24px,calc(env(safe-area-inset-bottom) + 18px))!important;
+  }
+  body.login-page .lock-shell{
+    position:relative!important;
+    z-index:2!important;
+    box-sizing:border-box!important;
+    width:min(100%,560px)!important;
+    max-width:560px!important;
+    margin:0 auto!important;
+    display:flex!important;
+    flex-direction:column!important;
+    align-items:stretch!important;
+    gap:16px!important;
+  }
+  body.login-page .lock-brand-panel{
+    order:1!important;
+    width:100%!important;
+    max-width:none!important;
+    margin:0!important;
+    padding:0 4px!important;
+    text-align:center!important;
+  }
+  body.login-page .lock-brand-top{
+    display:flex!important;
+    flex-direction:column!important;
+    align-items:center!important;
+    justify-content:center!important;
+    gap:8px!important;
+    margin:0!important;
+  }
+  body.login-page .lock-brand-top img{
+    width:82px!important;
+    height:68px!important;
+    object-fit:contain!important;
+    margin:0 auto 2px!important;
+  }
+  body.login-page .lock-title{
+    margin:0!important;
+    font-size:2.3rem!important;
+    line-height:1!important;
+    letter-spacing:-.04em!important;
+  }
+  body.login-page .lock-subtitle{
+    display:block!important;
+    margin-top:5px!important;
+    font-size:.92rem!important;
+    line-height:1.2!important;
+  }
+  body.login-page .lock-tagline{
+    margin:10px auto 0!important;
+    max-width:340px!important;
+    font-size:.96rem!important;
+    line-height:1.45!important;
+    text-align:center!important;
+  }
+  body.login-page .login-card{
+    order:2!important;
+    box-sizing:border-box!important;
+    width:100%!important;
+    max-width:none!important;
+    margin:0!important;
+    padding:16px!important;
+    border-radius:22px!important;
+  }
+  body.login-page .login-card::before{border-radius:21px!important}
+  body.login-page .profile-option{
+    min-height:64px!important;
+    padding:10px 12px!important;
+  }
+  body.login-page .login-enter{
+    width:100%!important;
+    min-height:52px!important;
+    margin-top:12px!important;
+  }
+  body.login-page .login-security-note{
+    margin:10px auto 0!important;
+    font-size:.72rem!important;
+    line-height:1.4!important;
+  }
+  body.login-page .lock-shell > .lock-feature-row{
+    order:3!important;
+    width:100%!important;
+    max-width:none!important;
+    margin:2px 0 0!important;
+    display:grid!important;
+    grid-template-columns:1fr!important;
+    gap:9px!important;
+  }
+  body.login-page .lock-feature,
+  body.login-page .lock-feature + .lock-feature{
+    min-width:0!important;
+    padding:11px 12px!important;
+    border-radius:15px!important;
+  }
+  body.login-page .lock-feature-icon{
+    width:38px!important;
+    height:38px!important;
+    border-radius:12px!important;
+    flex:0 0 38px!important;
+  }
+  body.login-page .lock-feature strong{font-size:.86rem!important}
+  body.login-page .lock-feature small{font-size:.73rem!important;line-height:1.35!important}
+  body.login-page .lock-footer{
+    position:relative!important;
+    inset:auto!important;
+    box-sizing:border-box!important;
+    width:min(100%,560px)!important;
+    max-width:560px!important;
+    margin:18px auto 0!important;
+    padding:0 0 max(4px,env(safe-area-inset-bottom))!important;
+    display:flex!important;
+    flex-direction:column!important;
+    align-items:stretch!important;
+    gap:12px!important;
+  }
+  body.login-page .lock-footer-cards{
+    display:grid!important;
+    grid-template-columns:1fr!important;
+    gap:8px!important;
+  }
+  body.login-page .lock-footer-card{
+    min-width:0!important;
+    padding:10px 12px!important;
+    border-radius:14px!important;
+  }
+  body.login-page .lock-footer-card strong{font-size:.78rem!important}
+  body.login-page .lock-footer-card small{font-size:.69rem!important;line-height:1.3!important}
+  body.login-page .lock-footer-meta{
+    display:flex!important;
+    justify-content:space-between!important;
+    align-items:flex-end!important;
+    gap:12px!important;
+    width:100%!important;
+    text-align:left!important;
+    font-size:.68rem!important;
+    white-space:normal!important;
+  }
+  body.login-page .lock-footer-meta strong{
+    margin:0!important;
+    font-size:.72rem!important;
+  }
+
+  /* Conteúdo interno: largura exata do viewport e final da página acima da navegação fixa. */
+  .app-bg,.app-shell,.main,.content,#view-root{
+    box-sizing:border-box!important;
+    width:100%!important;
+    max-width:100%!important;
+    min-width:0!important;
+    height:auto!important;
+    max-height:none!important;
+    overflow:visible!important;
+  }
+  .app-bg,.app-shell,.main{min-height:var(--marco-app-vh)!important}
+  .main{
+    padding-bottom:calc(var(--marco-mobile-nav-height) + env(safe-area-inset-bottom))!important;
+  }
+  .content{
+    padding:14px 12px calc(var(--marco-mobile-nav-height) + 34px + env(safe-area-inset-bottom))!important;
+  }
+}
+
+@media(max-width:430px){
+  body.login-page .login-screen{padding-left:14px!important;padding-right:14px!important}
+  body.login-page .lock-title{font-size:2.16rem!important}
+  body.login-page .lock-tagline{font-size:.91rem!important}
+}
+
+
+/* v1.7.7 — viewport mobile sem sobra abaixo da barra fixa */
+@media(max-width:900px){
+  html,body,#root{
+    min-height:100%!important;
+    height:auto!important;
+  }
+  .app-bg,
+  .app-shell,
+  .main{
+    min-height:var(--marco-app-vh)!important;
+    height:auto!important;
+  }
+  .main{padding-bottom:0!important}
+  .content{
+    padding-bottom:calc(var(--marco-mobile-nav-height) + 28px + env(safe-area-inset-bottom))!important;
+  }
+  .mobile-bottom-nav{
+    position:fixed!important;
+    left:0!important;
+    right:0!important;
+    bottom:0!important;
+    margin:0!important;
+  }
+
+}
+
+/* v2.2.0 — correções finais de teclado, login e fim de página. */
+@media(max-width:900px){
+  /* O documento cresce com o conteúdo; não fica limitado artificialmente a 100%. */
+  html.marco-mobile-ui{
+    height:auto!important;
+    min-height:100%!important;
+    overflow-y:auto!important;
+  }
+  html.marco-mobile-ui body:not(.login-page):not(.modal-open):not(.menu-open){
+    min-height:var(--marco-app-vh)!important;
+  }
+  #view-root{padding-bottom:12px!important}
+  #view-root::after{
+    content:"";
+    display:block;
+    width:100%;
+    height:calc(22px + env(safe-area-inset-bottom));
+    pointer-events:none;
+  }
+
+  /* A barra continua fixa no rodapé, mas desaparece durante a digitação. */
+  body.keyboard-open .modal-action-dock,
+  body.modal-field-active .modal-action-dock{
+    display:none!important;
+  }
+  body.keyboard-open .modal-form-scroll,
+  body.modal-field-active .modal-form-scroll{
+    padding-bottom:max(24px,env(safe-area-inset-bottom))!important;
+    scroll-padding-bottom:36px!important;
+  }
+
+  /* Login compacto: mostra marca e acesso sem uma rolagem vazia desnecessária. */
+  body.login-page .lock-feature-row,
+  body.login-page .lock-footer-cards{display:none!important}
+  body.login-page,
+  body.login-page #root{
+    min-height:var(--marco-app-vh)!important;
+  }
+  body.login-page .login-screen{
+    box-sizing:border-box!important;
+    min-height:var(--marco-app-vh)!important;
+    padding:max(20px,calc(env(safe-area-inset-top) + 14px)) 14px max(14px,env(safe-area-inset-bottom))!important;
+    justify-content:center!important;
+  }
+  body.login-page .lock-shell{gap:14px!important}
+  body.login-page .lock-brand-panel{padding:0 4px!important}
+  body.login-page .lock-brand-top img{width:72px!important;height:58px!important}
+  body.login-page .lock-title{font-size:2.12rem!important}
+  body.login-page .lock-tagline{margin-top:7px!important;font-size:.91rem!important}
+  body.login-page .login-card{padding:15px!important}
+  body.login-page .lock-footer{margin:12px auto 0!important;padding:0!important}
+  body.login-page .lock-footer-meta{font-size:.66rem!important}
+}
+
+/* v2.2.0 — login móvel sem rolagem excedente. */
+@media(max-width:900px){
+  body.login-page .lock-shell > .lock-feature-row,
+  body.login-page .lock-footer > .lock-footer-cards{
+    display:none!important;
+  }
+}
+
+/* v2.2.0 — prioridade final: login contido e conteúdo acima da navegação. */
+@media(max-width:900px){
+  html.marco-mobile-ui:has(body.login-page),
+  html.marco-mobile-ui body.login-page,
+  body.login-page #root,
+  body.login-page .login-screen{
+    box-sizing:border-box!important;
+    height:var(--marco-app-vh,100dvh)!important;
+    min-height:var(--marco-app-vh,100dvh)!important;
+    max-height:var(--marco-app-vh,100dvh)!important;
+    overflow:hidden!important;
+  }
+  body.login-page .lock-network-canvas{
+    width:100%!important;
+    height:100%!important;
+    max-height:var(--marco-app-vh,100dvh)!important;
+  }
+  #view-root::after{
+    height:calc(var(--marco-mobile-nav-height,76px) + 12px + env(safe-area-inset-bottom))!important;
+  }
+}

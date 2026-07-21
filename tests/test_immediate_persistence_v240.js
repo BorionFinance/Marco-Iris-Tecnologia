@@ -1,0 +1,11 @@
+'use strict';
+const fs=require('fs'),path=require('path');
+const assert=(c,m)=>{if(!c)throw new Error('FALHOU: '+m)};
+const app=fs.readFileSync(path.resolve(__dirname,'../js/app.js'),'utf8');
+const body=(app.match(/async function persist\(action='',detail='',opts=\{\}\)\{[\s\S]*?\n\}/)||[])[0]||'';
+assert(body.includes('await MarcoStorage.save(STATE)'),'alteração deve ir primeiro ao banco local');
+assert(body.includes('await flushCloudState('),'persist deve aguardar gravação serializada no Drive e publicação do bridge');
+assert(!body.includes('1900')&&!body.includes('setTimeout(async()=>{try{await GoogleDriveMarco.save'),'não pode depender do debounce antigo de 1,9 s');
+assert(app.includes('setTimeout(async()=>')&&app.includes('},5000);'),'falha de nuvem deve ter nova tentativa em 5 segundos');
+assert(app.includes("destinations.some(x=>x==='google-drive'||x==='google-unchanged')"),'bridge só pode ser considerado salvo após confirmação no Drive');
+console.log('OK: clientes, OSVs, lançamentos e exclusões salvam localmente e aguardam Drive/bridge, com retry de 5 s.');

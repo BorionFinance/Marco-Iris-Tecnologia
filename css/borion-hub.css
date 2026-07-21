@@ -1,0 +1,25 @@
+/* Hub Borion — acesso discreto e consistente em login e menu lateral. */
+.borion-hub-entry{box-sizing:border-box;text-decoration:none!important;-webkit-tap-highlight-color:transparent}
+.borion-hub-entry--login{position:fixed;top:max(16px,env(safe-area-inset-top));right:max(16px,env(safe-area-inset-right));z-index:120;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:38px;padding:8px 13px;border:1px solid rgba(255,255,255,.16);border-radius:999px;background:rgba(8,12,22,.40);color:rgba(255,255,255,.78);font:600 12px/1 system-ui,-apple-system,"Segoe UI",sans-serif;letter-spacing:.01em;box-shadow:0 10px 28px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.10);backdrop-filter:blur(16px) saturate(135%);-webkit-backdrop-filter:blur(16px) saturate(135%);transition:transform .18s ease,background-color .18s ease,border-color .18s ease,color .18s ease}
+.borion-hub-entry--login svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:0 0 16px}
+.borion-hub-entry--login:hover,.borion-hub-entry--login:focus-visible{transform:translateY(-1px);color:#fff;background:rgba(12,18,32,.68);border-color:rgba(255,255,255,.30);outline:none}
+.borion-hub-entry--login:active{transform:scale(.97)}
+.borion-hub-menu{cursor:pointer;text-decoration:none!important;margin-top:8px!important}
+.borion-hub-menu>svg{width:19px;height:19px;flex:0 0 19px}
+.borion-hub-menu svg{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.borion-hub-menu .borion-hub-menu-label{display:inline-block}
+html[data-borion-app="marco"] .borion-hub-entry--login{border-color:rgba(95,166,255,.28);background:rgba(3,30,58,.48);color:#b9d9ff}
+html[data-borion-app="amanda"] .borion-hub-entry--login{border-color:rgba(212,95,146,.24);background:rgba(255,250,252,.72);color:#9f3f68;box-shadow:0 10px 28px rgba(109,71,88,.12),inset 0 1px 0 rgba(255,255,255,.80)}
+html[data-borion-app="amanda"] .borion-hub-entry--login:hover,html[data-borion-app="amanda"] .borion-hub-entry--login:focus-visible{color:#7f2e52;background:rgba(255,255,255,.92);border-color:rgba(212,95,146,.38)}
+html[data-borion-app="borion"] .borion-hub-entry--login{border-color:rgba(201,164,92,.30);background:rgba(8,10,16,.50);color:#e8c98a}
+
+/* O acesso ao hub fica propositalmente menor que os módulos operacionais. */
+.borion-hub-menu{position:relative;opacity:.78;font-size:12.5px!important}
+.borion-hub-menu::before{content:"";position:absolute;left:12px;right:12px;top:-5px;height:1px;background:rgba(127,127,127,.14)}
+.borion-hub-menu:hover,.borion-hub-menu:focus-visible{opacity:1;outline:none}
+html[data-borion-app="borion"] .borion-hub-menu{min-height:44px!important;padding:7px 14px!important;gap:12px!important}
+html[data-borion-app="borion"] .borion-hub-menu .ic{width:34px!important;height:34px!important;border-radius:11px!important}
+html[data-borion-app="borion"] .borion-hub-menu .ic svg{width:18px!important;height:18px!important}
+
+@media(max-width:420px){.borion-hub-entry--login{top:max(11px,env(safe-area-inset-top));right:max(11px,env(safe-area-inset-right));min-height:35px;padding:7px 10px;font-size:11px}.borion-hub-entry--login svg{width:15px;height:15px}}
+@media(prefers-reduced-motion:reduce){.borion-hub-entry--login{transition:none}}

@@ -1,0 +1,48 @@
+/* Marco Iris Tecnologia 2.2.12 — correções consolidadas de anexos, itens e pagamentos */
+html,body{max-width:100%;overflow-x:hidden}
+input[data-money="true"]{font-variant-numeric:tabular-nums;text-align:right}
+
+/* Anexos técnicos como ação final, sem seção grande no fluxo */
+.attachment-manager-overlay-v227[hidden]{display:none!important}.attachment-manager-overlay-v227{position:fixed;inset:0;z-index:5000;display:grid;place-items:center;padding:20px;background:rgba(0,8,20,.68);backdrop-filter:blur(8px);opacity:0;transition:opacity .16s ease}.attachment-manager-overlay-v227.is-open{opacity:1}
+.attachment-manager-panel-v227{display:block!important;width:min(760px,96vw);max-height:min(78dvh,760px);overflow:auto;margin:0!important;padding:20px!important;border:1px solid rgba(126,184,242,.2)!important;border-radius:20px!important;background:linear-gradient(145deg,#0a315c,#061f3b)!important;box-shadow:0 24px 80px rgba(0,0,0,.45)}
+.staged-attachments-v227{margin-top:16px}.staged-attachments-v227 h4{margin:0 0 10px}.attachment-manager-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px;border:1px solid rgba(126,184,242,.14);border-radius:12px;background:rgba(4,24,47,.7);margin-bottom:8px}.attachment-manager-row strong,.attachment-manager-row small{display:block}.attachment-manager-row small{color:#86a5c5;margin-top:3px}.attachment-manager-row .actions{display:flex;gap:7px}.action-attachments-v227 b{font:inherit}
+
+/* Itens/serviços: card responsivo e sem scroll lateral */
+#order-items-editor{width:100%;max-width:100%;overflow:visible!important}
+#order-items-editor .item-editor-row{width:100%!important;max-width:100%!important;min-width:0!important;grid-template-columns:34px minmax(88px,.8fr) minmax(240px,2.4fr) minmax(78px,.65fr) minmax(128px,1fr) minmax(128px,1fr) minmax(94px,.8fr) 44px!important;gap:10px!important;align-items:end!important;box-sizing:border-box}
+#order-items-editor .item-editor-row>*{min-width:0}#order-items-editor select,#order-items-editor input{width:100%;min-width:0;max-width:100%}
+
+/* Pagamentos: duas linhas dentro do card */
+#order-payments-editor{width:100%;max-width:100%;overflow:visible!important}
+.payment-editor-row{display:block!important;width:100%!important;max-width:100%!important;min-width:0!important;padding:14px!important;box-sizing:border-box;overflow:hidden!important}
+.payment-row-main,.payment-row-secondary{display:grid;align-items:end;gap:10px;min-width:0}
+.payment-row-main{grid-template-columns:minmax(135px,.85fr) minmax(170px,1.15fr) minmax(160px,1fr) minmax(210px,1.3fr) minmax(160px,1fr)}
+.payment-row-secondary{grid-template-columns:minmax(145px,.8fr) minmax(220px,2fr) minmax(150px,.8fr) minmax(145px,.8fr) 46px;margin-top:10px}
+.payment-row-main>*,.payment-row-secondary>*{min-width:0}.payment-row-main input,.payment-row-main select,.payment-row-secondary input,.payment-row-secondary select{width:100%;min-width:0;max-width:100%}
+.payment-status-box,.payment-gross-box{display:grid;gap:5px;align-content:end;min-width:0}.payment-status-box small,.payment-gross-box small{color:#86a5c5}.payment-status-box .badge{position:static!important;max-width:100%;white-space:normal;justify-self:start}.payment-editor-row .payment-delete{align-self:end;justify-self:end}
+.stock-health-badge{display:inline-flex;align-items:center;border-radius:999px;padding:4px 8px;font-size:.68rem;font-weight:800}.stock-health-badge.danger{background:rgba(255,82,82,.18);color:#ff9c9c}.stock-health-badge.warn{background:rgba(255,180,50,.18);color:#ffd27e}.stock-health-badge.ok{background:rgba(51,190,126,.18);color:#8ee7b8}.stock-health-badge.neutral{background:rgba(143,167,190,.15);color:#b8c8d8}
+.inline-field-error{display:block;color:#ff9b9b;font-size:.7rem;margin-top:5px}.field.has-error input,.field.has-error select{border-color:#ff6b6b!important;box-shadow:0 0 0 2px rgba(255,107,107,.12)}
+
+@media(max-width:1250px){
+ .visual-layout-modal-v227 .layout-workspace-v221{grid-template-columns:minmax(0,1fr) 280px}
+ .client-editor-workspace{grid-template-columns:190px minmax(0,1fr)}.client-editor-workspace>[data-client-properties]{grid-column:1/-1;max-height:220px}
+ .payment-row-main{grid-template-columns:repeat(3,minmax(0,1fr))}.payment-row-secondary{grid-template-columns:repeat(3,minmax(0,1fr))}.payment-note{grid-column:span 2}
+ #order-items-editor .item-editor-row{grid-template-columns:34px minmax(100px,.8fr) minmax(230px,2fr) minmax(80px,.7fr) minmax(130px,1fr) minmax(130px,1fr)!important}.item-editor-row .stock-check,.item-editor-row .item-remove{grid-row:2}
+}
+@media(max-width:850px){
+ #modal-root .modal.client-layout-modal-v227,#modal-root .modal.visual-layout-modal-v227{width:100vw!important;height:100dvh!important;max-height:100dvh!important;border-radius:0!important}
+ .client-editor-toolbar{align-items:stretch}.client-editor-toolbar .toolbar-right{width:100%;overflow-x:auto;flex-wrap:nowrap}.client-editor-workspace{display:block;overflow:auto}.client-editor-workspace>aside,.client-editor-workspace>main{margin-bottom:10px;max-height:none}.client-editor-workspace>aside:first-child{max-height:190px}.client-editor-canvas{min-width:620px}
+ .visual-layout-modal-v227 .layout-workspace-v221{display:grid;grid-template-columns:1fr;grid-template-rows:minmax(300px,1fr) minmax(140px,30dvh);height:100%;min-height:0;overflow:hidden}.visual-layout-modal-v227 .layout-canvas-scroll-v221{height:100%;min-height:0}.visual-layout-modal-v227 .layout-properties-v221{min-height:0;max-height:none;margin-top:0;overflow:auto}.layout-zoom-controls-v227{margin-left:0}
+ .payment-row-main,.payment-row-secondary{grid-template-columns:repeat(2,minmax(0,1fr))}.payment-note{grid-column:1/-1}
+ #order-items-editor .item-editor-row{grid-template-columns:34px repeat(2,minmax(0,1fr))!important}.item-editor-row .item-name{grid-column:2/-1!important}.item-editor-row .item-reorder-controls{grid-column:1;grid-row:1/4}
+}
+@media(max-width:620px){
+ .client-layout-surface-v227{grid-template-columns:1fr}.client-layout-surface-v227>[data-client-layout-id]{grid-column:1!important}
+ .attachment-manager-overlay-v227{padding:0;align-items:end}.attachment-manager-panel-v227{width:100%;max-height:92dvh;border-radius:22px 22px 0 0!important}.attachment-manager-row{align-items:stretch;flex-direction:column}.attachment-manager-row .actions{display:grid;grid-template-columns:1fr 1fr}
+ .payment-row-main,.payment-row-secondary{grid-template-columns:1fr}.payment-note{grid-column:1}.payment-editor-row .payment-delete{width:100%;justify-self:stretch}.payment-editor-row .payment-delete button,.payment-editor-row>.icon-btn{width:100%}
+ #order-items-editor .item-editor-row{grid-template-columns:30px minmax(0,1fr)!important}#order-items-editor .item-editor-row>*{grid-column:2!important;grid-row:auto!important}#order-items-editor .item-editor-row .item-reorder-controls{grid-column:1!important;grid-row:1/7!important}#order-items-editor .item-editor-row .item-name{grid-column:2!important}.item-editor-row .item-remove{justify-self:stretch!important}.item-editor-row .item-remove button{width:100%}
+}
+
+/* Editor visual: supera a regra genérica de modal sem criar outra rolagem vertical concorrente. */
+html body #modal-root .modal.visual-layout-modal-v227>.modal-body{display:flex!important;flex-direction:column!important;min-height:0!important;overflow:hidden!important;padding:12px!important}
+html body #modal-root .modal.visual-layout-modal-v227>.modal-body>.layout-editor-v221{display:grid!important;flex:1 1 auto!important;width:100%!important;height:auto!important;min-width:0!important;min-height:0!important;grid-template-rows:auto minmax(0,1fr) auto!important;overflow:hidden!important}
