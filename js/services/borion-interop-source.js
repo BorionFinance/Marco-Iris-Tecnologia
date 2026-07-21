@@ -6,7 +6,7 @@
      bloqueio de publicação antes da carga oficial e proteção contra snapshot vazio. */
   const SPEC = Object.freeze({
     schema: 'borion.interop.snapshot', schemaVersion: 2, bridgeVersion: '3.0.1',
-    sourceAppId: 'marco-iris', sourceAppName: 'Marco Iris Tecnologia', sourceAppVersion: '2.4.1',
+    sourceAppId: 'marco-iris', sourceAppName: 'Marco Iris Tecnologia', sourceAppVersion: '2.4.2',
     targetProfileAlias: 'default', snapshotFile: 'marco-iris.bridge.json', ackFile: 'marco-iris.ack.json',
     integrationFolder: 'Borion_Integracoes'
   });
