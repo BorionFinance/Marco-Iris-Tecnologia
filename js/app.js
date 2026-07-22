@@ -13,12 +13,13 @@ let CLOCK_TIMER=null;
 let AUTOSAVE_TIMER=null;
 let GOOGLE_TIMER=null;
 let CLOUD_RETRY_TIMER=null;
+let CLOUD_PENDING_LOCAL=false;
 let AUTO_BACKUP_TIMER=null;
 let REMOTE_REFRESH_TIMER=null;
 let REMOTE_REFRESH_INFLIGHT=null;
 let REMOTE_REFRESH_FOCUS_HANDLER=null;
 let REMOTE_REFRESH_VISIBILITY_HANDLER=null;
-const REMOTE_REFRESH_INTERVAL_MS=12000;
+const REMOTE_REFRESH_INTERVAL_MS=8000;
 let LAST_AUTO_BACKUP_AT='';
 let LOCKED=true;
 let LOCK_NETWORK=null;
@@ -115,13 +116,16 @@ async function flushCloudState(reason='alteracao',{backup=false,retryMedia=true}
   window.MarcoBorionInterop?.prepareState?.(STATE);
   await MarcoStorage.save(STATE,{touch:false});
   await GoogleDriveMarco.enqueueSave(STATE,{backup,reason:cloudReason(reason)});
+  /* A base principal já foi confirmada. O bridge pode atualizar carimbos locais,
+     mas isso não significa que exista uma edição de negócio ainda pendente. */
+  CLOUD_PENDING_LOCAL=false;
   const bridge=await publishBridgeConfirmed();
   return {saved:true,bridge};
 }
 function scheduleCloudRetry(reason='alteracao'){
   clearTimeout(CLOUD_RETRY_TIMER);
   CLOUD_RETRY_TIMER=setTimeout(async()=>{
-    try{await flushCloudState(`repeticao-${reason}`);setSaveStatus('Google Drive e integração sincronizados','ok');}
+    try{await flushCloudState(`repeticao-${reason}`);CLOUD_PENDING_LOCAL=false;setSaveStatus('Google Drive e integração sincronizados','ok');}
     catch(error){console.warn('[CLOUD_RETRY]',error);setSaveStatus('Salvo local · nuvem ainda pendente','warn');scheduleCloudRetry(reason);}
   },5000);
 }
@@ -200,6 +204,7 @@ async function persist(action='',detail='',opts={}){
      que ainda está a caminho do Google Drive/Borion. */
   window.MarcoBorionInterop?.prepareState?.(STATE);
   await MarcoStorage.save(STATE);
+  if(opts.google!==false&&data().settings.autosaveGoogle&&GoogleDriveMarco.isConfigured())CLOUD_PENDING_LOCAL=true;
   clearTimeout(AUTOSAVE_TIMER);
   clearTimeout(GOOGLE_TIMER);
   setSaveStatus('Salvo localmente · sincronizando em segundo plano','warn');
@@ -210,15 +215,16 @@ async function persist(action='',detail='',opts={}){
 
 function hasUnsyncedLocalState(){
   if(!STATE)return false;
-  if(BACKGROUND_SAVE_COMPLETED<BACKGROUND_SAVE_REQUESTED||BACKGROUND_SAVE_PROMISE)return true;
-  const localAt=Date.parse(String(STATE.updatedAt||'')),confirmedAt=Date.parse(String(STATE.driveSync?.updatedAt||''));
-  return Number.isFinite(localAt)&&(!Number.isFinite(confirmedAt)||localAt>confirmedAt+250);
+  /* Não usamos STATE.updatedAt: a publicação do bridge atualiza carimbos técnicos
+     depois que a base principal já foi confirmada e isso bloqueava o polling para
+     sempre. Apenas mudanças de negócio realmente pendentes impedem uma carga remota. */
+  return CLOUD_PENDING_LOCAL||BACKGROUND_SAVE_COMPLETED<BACKGROUND_SAVE_REQUESTED||!!BACKGROUND_SAVE_PROMISE;
 }
 async function refreshFromDriveIfNewer({reason='intervalo'}={}){
   if(LOCKED||document.hidden||!STATE||!window.GoogleDriveMarco?.isConfigured?.())return {skipped:true,reason:'indisponivel'};
   if(REMOTE_REFRESH_INFLIGHT)return await REMOTE_REFRESH_INFLIGHT;
   /* Nunca troca o estado enquanto o Marco está preenchendo uma janela nem enquanto
-     existe alteração local esperando confirmação. A próxima rodada ocorre em 12 s. */
+     existe alteração local esperando confirmação. A próxima rodada ocorre em 8 s. */
   if(document.querySelector('#modal-root .modal')||hasUnsyncedLocalState())return {skipped:true,reason:'edicao-local'};
   REMOTE_REFRESH_INFLIGHT=(async()=>{
     try{
@@ -228,6 +234,7 @@ async function refreshFromDriveIfNewer({reason='intervalo'}={}){
       window.MarcoBorionInterop?.prepareState?.(STATE);
       await MarcoStorage.save(STATE,{touch:false});
       if(!LOCKED)renderView('none');
+      CLOUD_PENDING_LOCAL=false;
       setSaveStatus('Atualizado do Google Drive','ok');
       return result;
     }catch(error){
@@ -241,7 +248,7 @@ async function refreshFromDriveIfNewer({reason='intervalo'}={}){
 }
 function startRemoteRefresh(){
   clearInterval(REMOTE_REFRESH_TIMER);
-  REMOTE_REFRESH_TIMER=setInterval(()=>refreshFromDriveIfNewer({reason:'intervalo-12s'}),REMOTE_REFRESH_INTERVAL_MS);
+  REMOTE_REFRESH_TIMER=setInterval(()=>refreshFromDriveIfNewer({reason:'intervalo-8s'}),REMOTE_REFRESH_INTERVAL_MS);
   if(REMOTE_REFRESH_FOCUS_HANDLER)window.removeEventListener('focus',REMOTE_REFRESH_FOCUS_HANDLER);
   if(REMOTE_REFRESH_VISIBILITY_HANDLER)document.removeEventListener('visibilitychange',REMOTE_REFRESH_VISIBILITY_HANDLER);
   REMOTE_REFRESH_FOCUS_HANDLER=()=>setTimeout(()=>refreshFromDriveIfNewer({reason:'foco'}),350);
@@ -603,6 +610,7 @@ async function submitLogin(form){
     normalizeState();
     window.MarcoBorionInterop?.prepareState?.(STATE);
     await MarcoStorage.save(STATE,{touch:false});
+    CLOUD_PENDING_LOCAL=false;
     window.MarcoBorionInterop?.resume?.('offline-mode');
     window.MarcoBorionInterop?.setReady?.(STATE,{companyInstanceId:STATE?.interconnections?.borion?.companyInstanceId||STATE?.interconnections?.borion?.instanceId});
     progress('Abrindo aplicativo');
@@ -667,7 +675,7 @@ function renderLogin(entry=''){
         <div class="lock-feature"><div class="lock-feature-icon">${icon('cloud')}</div><div><strong>Soluções em nuvem</strong><small>Fotos, PDFs, anexos e dados organizados no Google Drive.</small></div></div>
       </div>
     </section>
-    <footer class="lock-footer"><div class="lock-footer-cards"><div class="lock-footer-card"><strong><span class="status-dot-live"></span> Sistema operacional</strong><small>Interface pronta para uso.</small></div><div class="lock-footer-card"><strong>${icon('cloud')} Google Drive e backups</strong><small>Dados e arquivos em pastas separadas.</small></div><div class="lock-footer-card"><strong>${icon('download')} Aplicativo PWA</strong><small>Instalação no computador e celular.</small></div></div><div class="lock-footer-meta"><strong>Marco Iris Tecnologia © 2026</strong><span>v2.4.3</span></div></footer>
+    <footer class="lock-footer"><div class="lock-footer-cards"><div class="lock-footer-card"><strong><span class="status-dot-live"></span> Sistema operacional</strong><small>Interface pronta para uso.</small></div><div class="lock-footer-card"><strong>${icon('cloud')} Google Drive e backups</strong><small>Dados e arquivos em pastas separadas.</small></div><div class="lock-footer-card"><strong>${icon('download')} Aplicativo PWA</strong><small>Instalação no computador e celular.</small></div></div><div class="lock-footer-meta"><strong>Marco Iris Tecnologia © 2026</strong><span>v2.4.4</span></div></footer>
   </main>`;
   startLockNetwork();
 }
@@ -947,8 +955,8 @@ function exportFinanceCsv(){const rows=[['Código','OSV','Tipo','Forma de pagame
 let manualSaveInflight=null,connectGoogleInflight=null,syncGoogleInflight=null;
 async function manualSave(){if(manualSaveInflight)return await manualSaveInflight;manualSaveInflight=(async()=>{setSaveStatus('Salvando, criando backup e verificando…','warn');await MarcoStorage.save(STATE);await MarcoStorage.createBackup(STATE,'manual');const saved=['navegador'],failed=[];try{const h=await MarcoStorage.getFolderHandle();if(h){await MarcoStorage.saveToFolder(STATE,{handle:h,requestPermission:true,backup:true,reason:'manual'});saved.push('pasta local');}}catch(e){failed.push(`Pasta: ${e.message}`);}if(GoogleDriveMarco.isConfigured()){try{await flushCloudState('manual',{backup:true,retryMedia:true});const diag=await GoogleDriveMarco.diagnose(STATE);if(!diag.ok)throw new Error('A base ou o marco-iris.bridge.json não pôde ser confirmado.');saved.push('Google Drive + Borion_Integracoes');}catch(e){failed.push(`Drive: ${e.message}`);scheduleCloudRetry('manual');}}setSaveStatus(failed.length?'Backup parcial · nuvem pendente':'Backup completo e confirmado',failed.length?'warn':'ok');toast(`Salvo em ${saved.join(', ')}.${failed.length?` ${failed.join(' · ')}`:''}`,failed.length?'warn':'ok');})().finally(()=>{manualSaveInflight=null;});return await manualSaveInflight;}
 async function connectGoogle(){if(connectGoogleInflight)return await connectGoogleInflight;const buttons=$$('[data-action="connect-google"]');buttons.forEach(button=>{button.disabled=true;button.dataset.originalText=button.innerHTML;button.innerHTML=`${icon('cloud')} Conectando…`;});connectGoogleInflight=(async()=>{window.MarcoBorionInterop?.pause?.('connect-google');setSaveStatus('Localizando a base oficial…','warn');const localBefore=clone(STATE);const result=await GoogleDriveMarco.initializeOfficialState(STATE,{interactive:true,onProgress:text=>setSaveStatus(text,'warn')});if(result.source==='drive')await MarcoStorage.createBackup(localBefore,'antes-de-conectar-drive-oficial');STATE=result.state;normalizeState();await MarcoStorage.save(STATE);window.MarcoBorionInterop?.resume?.('connect-google');window.MarcoBorionInterop?.setReady?.(STATE);const sent=await syncPendingMedia();await flushCloudState('primeira-conexao-confirmada',{backup:true,retryMedia:false});const diag=await GoogleDriveMarco.diagnose(STATE);if(!diag.ok)throw new Error('A instalação foi conectada, mas a base principal ou o marco-iris.bridge.json não foi confirmado.');setSaveStatus('Drive, backups e integração confirmados','ok');renderShell();toast(`Conta ${result.user?.email||''} conectada à base oficial${sent?` · ${sent} arquivos enviados`:''}.`);})().catch(e=>{window.MarcoBorionInterop?.setNotReady?.(e.message);throw e;}).finally(()=>{connectGoogleInflight=null;buttons.forEach(button=>{button.disabled=false;if(button.dataset.originalText)button.innerHTML=button.dataset.originalText;});});return await connectGoogleInflight;}
-async function syncGoogle(){if(syncGoogleInflight)return await syncGoogleInflight;syncGoogleInflight=(async()=>{window.MarcoBorionInterop?.pause?.('manual-sync');setSaveStatus('Comparando revisões…','warn');const result=await GoogleDriveMarco.sync(STATE,{interactive:true,backup:true,reason:'sincronizacao'});if(result.direction==='remote'){await MarcoStorage.createBackup(STATE,'antes-de-carregar-google');STATE=result.state;await backupStateBeforeV220Migration(STATE,'google-remoto');normalizeState();await MarcoStorage.save(STATE);renderShell();toast('A revisão oficial mais recente foi carregada do Google Drive.');}const sent=await syncPendingMedia();window.MarcoBorionInterop?.resume?.('manual-sync');window.MarcoBorionInterop?.setReady?.(STATE);await flushCloudState('sincronizacao-manual-confirmada',{backup:false,retryMedia:false});const diag=await GoogleDriveMarco.diagnose(STATE);if(!diag.ok)throw new Error('A sincronização terminou, mas a base ou a integração não pôde ser confirmada.');setSaveStatus('Google Drive e integração confirmados','ok');renderView();toast(`Sincronização concluída${sent?` · ${sent} mídias enviadas`:''}.`);})().catch(e=>{window.MarcoBorionInterop?.setNotReady?.(e.message);throw e;}).finally(()=>{syncGoogleInflight=null;});return await syncGoogleInflight;}
-async function loadGoogle(){window.MarcoBorionInterop?.pause?.('load-google');try{const remote=await GoogleDriveMarco.load({interactive:true});if(!await confirmAction('Carregar a base oficial do Google Drive substituirá a base deste navegador. Continuar?')){window.MarcoBorionInterop?.resume?.('load-google');return;}await MarcoStorage.createBackup(STATE,'antes-de-carregar-google');STATE=remote.state;await backupStateBeforeV220Migration(STATE,'google-carregar');normalizeState();await MarcoStorage.save(STATE);window.MarcoBorionInterop?.resume?.('load-google');window.MarcoBorionInterop?.setReady?.(STATE);await flushCloudState('carregamento-drive-confirmado',{backup:false,retryMedia:true});renderShell();toast('Base oficial carregada e integração republicada.');}catch(e){window.MarcoBorionInterop?.setNotReady?.(e.message);throw e;}}
+async function syncGoogle(){if(syncGoogleInflight)return await syncGoogleInflight;syncGoogleInflight=(async()=>{window.MarcoBorionInterop?.pause?.('manual-sync');setSaveStatus('Comparando revisões…','warn');const result=await GoogleDriveMarco.sync(STATE,{interactive:true,backup:true,reason:'sincronizacao'});if(result.direction==='remote'){await MarcoStorage.createBackup(STATE,'antes-de-carregar-google');STATE=result.state;await backupStateBeforeV220Migration(STATE,'google-remoto');normalizeState();await MarcoStorage.save(STATE);CLOUD_PENDING_LOCAL=false;renderShell();toast('A revisão oficial mais recente foi carregada do Google Drive.');}const sent=await syncPendingMedia();window.MarcoBorionInterop?.resume?.('manual-sync');window.MarcoBorionInterop?.setReady?.(STATE);await flushCloudState('sincronizacao-manual-confirmada',{backup:false,retryMedia:false});const diag=await GoogleDriveMarco.diagnose(STATE);if(!diag.ok)throw new Error('A sincronização terminou, mas a base ou a integração não pôde ser confirmada.');setSaveStatus('Google Drive e integração confirmados','ok');renderView();toast(`Sincronização concluída${sent?` · ${sent} mídias enviadas`:''}.`);})().catch(e=>{window.MarcoBorionInterop?.setNotReady?.(e.message);throw e;}).finally(()=>{syncGoogleInflight=null;});return await syncGoogleInflight;}
+async function loadGoogle(){window.MarcoBorionInterop?.pause?.('load-google');try{const remote=await GoogleDriveMarco.load({interactive:true});if(!await confirmAction('Carregar a base oficial do Google Drive substituirá a base deste navegador. Continuar?')){window.MarcoBorionInterop?.resume?.('load-google');return;}await MarcoStorage.createBackup(STATE,'antes-de-carregar-google');STATE=remote.state;await backupStateBeforeV220Migration(STATE,'google-carregar');normalizeState();await MarcoStorage.save(STATE);CLOUD_PENDING_LOCAL=false;window.MarcoBorionInterop?.resume?.('load-google');window.MarcoBorionInterop?.setReady?.(STATE);await flushCloudState('carregamento-drive-confirmado',{backup:false,retryMedia:true});renderShell();toast('Base oficial carregada e integração republicada.');}catch(e){window.MarcoBorionInterop?.setNotReady?.(e.message);throw e;}}
 async function connectFolder(){const h=await MarcoStorage.connectFolder();await MarcoStorage.saveToFolder(STATE,{handle:h,backup:true,reason:'primeira-conexao'});renderView();toast(`Pasta “${h.name}” conectada e backup criado.`);}
 async function diagnoseDriveInstallation(){
   if(!GoogleDriveMarco.isConfigured())throw new Error('Conecte o Google Drive antes de executar o diagnóstico.');
@@ -1087,7 +1095,7 @@ async function boot(){
   LOCKED=true;
   renderLogin();
   if('serviceWorker' in navigator){
-    navigator.serviceWorker.register('./sw.js?v=2.4.3').then(reg=>reg?.update?.()).catch(e=>console.warn('Service worker:',e));
+    navigator.serviceWorker.register('./sw.js?v=2.4.4').then(reg=>reg?.update?.()).catch(e=>console.warn('Service worker:',e));
   }
   window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();window.__installPrompt=e;});
   startAutoBackupRotation();

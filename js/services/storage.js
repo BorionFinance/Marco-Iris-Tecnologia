@@ -8,6 +8,7 @@
   const HANDLES='handles';
   const DRAFTS='drafts';
   const KEY='main';
+  const SYNC_BASE_KEY='sync-base-v1';
   const DATA_FILE='Marco_Iris_Dados.json';
 
   function clone(v){return JSON.parse(JSON.stringify(v));}
@@ -43,6 +44,9 @@
   const all=s=>tx(s,'readonly',x=>x.getAll());
 
   async function load(){return clone((await get(STATE,KEY))||window.MARCO_INITIAL_DATA);}
+  async function loadSyncBase(){const state=await get(STATE,SYNC_BASE_KEY);return state?clone(state):null;}
+  async function saveSyncBase(state){if(!state)return null;await put(STATE,clone(state),SYNC_BASE_KEY);return state;}
+  async function clearSyncBase(){await del(STATE,SYNC_BASE_KEY);return true;}
   async function save(state,{touch=true}={}){
     if(touch)state.updatedAt=new Date().toISOString();
     await put(STATE,clone(state),KEY);
@@ -130,5 +134,5 @@
     return true;
   }
 
-  window.MarcoStorage={load,save,createBackup,listBackups,restoreBackup,putMedia,getMedia,deleteMedia,saveDraft,getDraft,deleteDraft,listDrafts,putDraftMedia,deleteDraftMedia,connectFolder,getFolderHandle,forgetFolder,ensurePermission,saveToFolder,readFromFolder,downloadJson,downloadBlob,readUploadedJson,wipeAll,DATA_FILE,DB_NAME:DB};
+  window.MarcoStorage={load,save,loadSyncBase,saveSyncBase,clearSyncBase,createBackup,listBackups,restoreBackup,putMedia,getMedia,deleteMedia,saveDraft,getDraft,deleteDraft,listDrafts,putDraftMedia,deleteDraftMedia,connectFolder,getFolderHandle,forgetFolder,ensurePermission,saveToFolder,readFromFolder,downloadJson,downloadBlob,readUploadedJson,wipeAll,DATA_FILE,DB_NAME:DB};
 })();

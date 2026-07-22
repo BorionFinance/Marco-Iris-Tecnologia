@@ -27,6 +27,41 @@
   function jsonClone(value){return value==null?value:JSON.parse(JSON.stringify(value));}
   function canonical(value){if(Array.isArray(value))return value.map(canonical);if(value&&typeof value==='object'){const out={};Object.keys(value).sort().forEach(k=>{if(k!=='integrity')out[k]=canonical(value[k]);});return out;}return value;}
   async function stateChecksum(state){const text=JSON.stringify(canonical(state));const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text));return [...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,'0')).join('');}
+  async function contentChecksum(state){const clean=jsonClone(state||{});delete clean.driveSync;delete clean.updatedAt;delete clean.integrity;const bridge=clean?.interconnections?.borion;if(bridge&&typeof bridge==='object'){delete bridge.deviceId;delete bridge.lastPublishAt;delete bridge.lastPublishStatus;delete bridge.lastError;}const text=JSON.stringify(canonical(clean));const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text));return [...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,'0')).join('');}
+  function valueEqual(a,b){return JSON.stringify(canonical(a))===JSON.stringify(canonical(b));}
+  function itemKey(item,index=0){return String(item?.id||item?.code||item?.key||item?.sourceRecordId||item?.aggregateId||`__index_${index}`);}
+  function mergeArrayDelta(baseArr,localArr,remoteArr){
+    const base=Array.isArray(baseArr)?baseArr:[],local=Array.isArray(localArr)?localArr:[],remote=Array.isArray(remoteArr)?remoteArr:[];
+    const bm=new Map(base.map((item,index)=>[itemKey(item,index),item])),lm=new Map(local.map((item,index)=>[itemKey(item,index),item])),rm=new Map(remote.map((item,index)=>[itemKey(item,index),jsonClone(item)]));
+    const order=remote.map((item,index)=>itemKey(item,index));
+    for(const [key,baseItem] of bm){
+      if(!lm.has(key)){rm.delete(key);continue;}
+      const localItem=lm.get(key);if(!valueEqual(localItem,baseItem))rm.set(key,jsonClone(localItem));
+    }
+    for(const [key,localItem] of lm){if(!bm.has(key)){rm.set(key,jsonClone(localItem));if(!order.includes(key))order.push(key);}}
+    return [...order.filter((key,index)=>order.indexOf(key)===index&&rm.has(key)).map(key=>rm.get(key)),...[...rm.entries()].filter(([key])=>!order.includes(key)).map(([,item])=>item)];
+  }
+  function mergeObjectDelta(base,local,remote){
+    if(Array.isArray(base)||Array.isArray(local)||Array.isArray(remote))return mergeArrayDelta(base,local,remote);
+    if(!local||typeof local!=='object'||!remote||typeof remote!=='object'||!base||typeof base!=='object')return !valueEqual(local,base)?jsonClone(local):jsonClone(remote);
+    const out=jsonClone(remote);
+    for(const key of new Set([...Object.keys(base),...Object.keys(local)])){
+      if(!(key in local)){delete out[key];continue;}
+      if(!(key in base)){out[key]=jsonClone(local[key]);continue;}
+      if(valueEqual(local[key],base[key]))continue;
+      if(local[key]&&typeof local[key]==='object'&&base[key]&&typeof base[key]==='object'&&remote[key]&&typeof remote[key]==='object')out[key]=mergeObjectDelta(base[key],local[key],remote[key]);
+      else out[key]=jsonClone(local[key]);
+    }
+    return out;
+  }
+  function rebaseLocalChanges(baseState,localState,remoteState){
+    if(!baseState||!localState||!remoteState)throw new Error('Não foi possível reconciliar as alterações entre dispositivos sem a base de sincronização.');
+    const merged=mergeObjectDelta(baseState,localState,remoteState);
+    merged.driveSync=jsonClone(remoteState.driveSync||{});
+    merged.updatedAt=String(localState.updatedAt||remoteState.updatedAt||new Date().toISOString());
+    ensureCompanyId(merged);
+    return merged;
+  }
   const SOURCE_COLLECTIONS=['clients','serviceOrders','orderItems','payments','products','services','supplies','stockMovements','appointments','consents'];
   function sourceCount(state){let total=0;for(const d of Object.values(state?.dataByProfile||{})){if(!d||typeof d!=='object')continue;for(const k of SOURCE_COLLECTIONS)total+=Array.isArray(d[k])?d[k].length:0;}return total;}
   function explicitLocalDeletionCoverage(localState,remoteState){
@@ -217,7 +252,7 @@
   }
   async function writeInstallationManifest(rootIdValue,structure,state,user){
     if(!rootIdValue||!structure||!state)return null;
-    const manifest={schema:'marco.iris.installation',schemaVersion:1,appId:'marco-iris-tecnologia',appVersion:'2.4.3',createdOrUpdatedAt:new Date().toISOString(),companyInstanceId:companyIdOf(state),googleAccount:String(user?.email||''),rootFolderId:rootIdValue,folders:Object.fromEntries(Object.entries(FOLDERS).map(([key,name])=>[key,{name,id:structure[key]||''}]))};
+    const manifest={schema:'marco.iris.installation',schemaVersion:1,appId:'marco-iris-tecnologia',appVersion:'2.4.4',createdOrUpdatedAt:new Date().toISOString(),companyInstanceId:companyIdOf(state),googleAccount:String(user?.email||''),rootFolderId:rootIdValue,folders:Object.fromEntries(Object.entries(FOLDERS).map(([key,name])=>[key,{name,id:structure[key]||''}]))};
     const file=await resolveIntegrationFile(rootIdValue,INSTALLATION_FILE,true,manifest);
     await updateJson(file.id,manifest);
     const confirmed=await readJson(file.id);
@@ -251,7 +286,13 @@
       let file=await resolveDataFileUncached(folderId);
       if(!file){for(const delay of [500,1200,2400]){await sleep(delay);file=await resolveDataFileUncached(folderId);if(file)break;}}
       let remoteState=null;
-      if(file){remoteState=await readJson(file.id);assertSafeReplacement(state,remoteState);}
+      if(file){
+        remoteState=await readJson(file.id);
+        /* Abrir outro dispositivo não pode fabricar uma revisão nova. Se os dados
+           funcionais são idênticos, adotamos a confirmação oficial existente. */
+        if(await contentChecksum(state)===await contentChecksum(remoteState))return {file:rememberDataFile(folderId,file),state:remoteState,unchanged:true};
+        assertSafeReplacement(state,remoteState);
+      }
       else if(!allowCreate)throw new Error('A base oficial não foi localizada no Google Drive.');
       const prepared=await prepareOfficialState(state,remoteState);
       if(remoteState){const remoteHash=remoteState?.driveSync?.checksum||await stateChecksum(remoteState);if(remoteHash===prepared.driveSync.checksum)return {file:rememberDataFile(folderId,file),state:remoteState,unchanged:true};
@@ -264,25 +305,19 @@
     });
   }
 
-  async function applyConfirmedState(localState,confirmedState,startedUpdatedAt=''){
+  async function applyConfirmedState(localState,confirmedState,startedSnapshot=null){
     if(!localState||!confirmedState)return localState;
-    const confirmed=jsonClone(confirmedState),confirmedRev=Math.max(0,Number(confirmed?.driveSync?.revision)||0),currentRev=Math.max(0,Number(localState?.driveSync?.revision)||0);
+    const confirmed=jsonClone(confirmedState),snapshot=startedSnapshot&&typeof startedSnapshot==='object'?jsonClone(startedSnapshot):jsonClone(localState);
+    const confirmedRev=Math.max(0,Number(confirmed?.driveSync?.revision)||0),currentRev=Math.max(0,Number(localState?.driveSync?.revision)||0);
     if(confirmedRev<currentRev)return localState;
-    const changedWhileSaving=String(localState.updatedAt||'')!==String(startedUpdatedAt||'');
-    if(!changedWhileSaving){
-      Object.keys(localState).forEach(key=>delete localState[key]);
-      Object.assign(localState,confirmed);
-    }else{
-      /* Uma edição feita enquanto o Drive respondia nunca pode ser apagada.
-         Atualizamos somente o marcador oficial da revisão e a identidade da base. */
-      localState.driveSync=jsonClone(confirmed.driveSync||{});
-      localState.interconnections=localState.interconnections&&typeof localState.interconnections==='object'?localState.interconnections:{};
-      localState.interconnections.borion=localState.interconnections.borion&&typeof localState.interconnections.borion==='object'?localState.interconnections.borion:{};
-      const official=confirmed?.interconnections?.borion||{};
-      if(official.companyInstanceId)localState.interconnections.borion.companyInstanceId=official.companyInstanceId;
-      if(official.instanceId)localState.interconnections.borion.instanceId=official.instanceId;
-    }
+    const changedWhileSaving=!valueEqual(localState,snapshot);
+    const next=changedWhileSaving?rebaseLocalChanges(snapshot,localState,confirmed):confirmed;
+    Object.keys(localState).forEach(key=>delete localState[key]);
+    Object.assign(localState,next);
     if(window.MarcoStorage?.save)await window.MarcoStorage.save(localState,{touch:false});
+    /* A base confirmada é o ponto comum usado num conflito posterior. Ela fica
+       separada do estado local, que pode já conter uma edição ainda não enviada. */
+    if(window.MarcoStorage?.saveSyncBase)await window.MarcoStorage.saveSyncBase(confirmed);
     return localState;
   }
 
@@ -336,9 +371,23 @@
     async connect(interactive=true){if(connectionPromise)return await connectionPromise;connectionPromise=(async()=>{const user=await authenticateGoogle(interactive);let root=rootId();if(!root){const chosen=await picker();root=chosen.id;setRoot(root);}const structure=await ensureStructure(false);return {user,rootId:root,structure};})().finally(()=>{connectionPromise=null;});return await connectionPromise;},
     async ensureConnection(interactive=false){if(!this.isConfigured())return await this.connect(interactive);await Auth.ensure(interactive);const user=await assertAuthorizedUser(await Auth.fetchUser());return {user,rootId:rootId(),structure:await ensureStructure(false)};},
     async findDataFile(){const {structure}=await this.ensureConnection(false);this.currentFile=await resolveDataFile(structure.data);return this.currentFile;},
-    async save(state,{backup=false,reason='manual',interactive=false}={}){const startedUpdatedAt=String(state?.updatedAt||'');const {structure,user,rootId:connectedRoot}=await this.ensureConnection(interactive);const result=await saveDataFile(structure.data,state,{reason});this.currentFile=result.file;await applyConfirmedState(state,result.state,startedUpdatedAt);localStorage.setItem(LAST_SAVE,new Date().toISOString());await writeInstallationManifest(connectedRoot,structure,result.state,user);if(backup){await writeRotatingBackup(structure.backups,result.state,{kind:'forcesave',force:true});const name=`Marco_Iris_${String(reason).replace(/[^a-zA-Z0-9_-]/g,'-')}_${stamp()}.json`;const bf=await createMetadata({name,mimeType:'application/json',parents:[structure.backups]});await updateJson(bf.id,result.state);}return result.file;},
-    async load({interactive=false}={}){await this.ensureConnection(interactive);const f=this.currentFile||await this.findDataFile();if(!f)throw new Error('Ainda não existe um arquivo de dados nesta pasta.');const [state,info]=await Promise.all([readJson(f.id),meta(f.id)]);const check=validateOfficialState(state);if(!check.valid)throw new Error('A base oficial do Google Drive é inválida: '+check.errors.join(' '));ensureCompanyId(state);this.currentFile=info;return {state,meta:info};},
-    async initializeOfficialState(localState,{interactive=true,onProgress=()=>{}}={}){onProgress('Conectando ao Google Drive');const conn=await this.ensureConnection(interactive);onProgress('Localizando a base oficial');const file=this.currentFile||await this.findDataFile();if(!file){onProgress('Criando a primeira base oficial');const result=await saveDataFile(conn.structure.data,localState,{reason:'primeira-base-oficial'});this.currentFile=result.file;return {state:result.state,created:true,source:'local',user:conn.user};}onProgress('Validando dados oficiais');const remote=await this.load();onProgress('Comparando versões');ensureCompanyId(remote.state);const decision=decideOfficialSource(localState,remote.state);if(decision.foreignInstance)console.warn('[GOOGLE_DRIVE] Identificador de instância local diverge do oficial; a revisão decide qual base prevalece, sem descartar automaticamente.');
+    async save(state,{backup=false,reason='manual',interactive=false}={}){
+      const startedSnapshot=jsonClone(state),{structure,user,rootId:connectedRoot}=await this.ensureConnection(interactive);let result;
+      try{result=await saveDataFile(structure.data,startedSnapshot,{reason});}
+      catch(error){
+        if(error?.code!=='REMOTE_NEWER')throw error;
+        /* Outro dispositivo publicou primeiro. Em vez de travar numa repetição
+           infinita, reaplicamos apenas as mudanças locais sobre a base remota. */
+        const file=this.currentFile||await resolveDataFile(structure.data);if(!file)throw error;
+        const remoteState=await readJson(file.id),baseState=await window.MarcoStorage?.loadSyncBase?.();
+        if(!baseState){const e=new Error('O Google Drive foi alterado em outro dispositivo, mas a base de reconciliação local não foi localizada. Atualize o aplicativo antes de editar novamente.');e.code='SYNC_BASE_MISSING';throw e;}
+        const rebased=rebaseLocalChanges(baseState,startedSnapshot,remoteState);
+        result=await saveDataFile(structure.data,rebased,{reason:`reconciliado-${reason}`});
+      }
+      this.currentFile=result.file;await applyConfirmedState(state,result.state,startedSnapshot);localStorage.setItem(LAST_SAVE,new Date().toISOString());await writeInstallationManifest(connectedRoot,structure,result.state,user);if(backup){await writeRotatingBackup(structure.backups,result.state,{kind:'forcesave',force:true});const name=`Marco_Iris_${String(reason).replace(/[^a-zA-Z0-9_-]/g,'-')}_${stamp()}.json`;const bf=await createMetadata({name,mimeType:'application/json',parents:[structure.backups]});await updateJson(bf.id,result.state);}return result.file;
+    },
+    async load({interactive=false,rememberBase=true}={}){await this.ensureConnection(interactive);const f=this.currentFile||await this.findDataFile();if(!f)throw new Error('Ainda não existe um arquivo de dados nesta pasta.');const [state,info]=await Promise.all([readJson(f.id),meta(f.id)]);const check=validateOfficialState(state);if(!check.valid)throw new Error('A base oficial do Google Drive é inválida: '+check.errors.join(' '));ensureCompanyId(state);this.currentFile=info;if(rememberBase&&window.MarcoStorage?.saveSyncBase)await window.MarcoStorage.saveSyncBase(state);return {state,meta:info};},
+    async initializeOfficialState(localState,{interactive=true,onProgress=()=>{}}={}){onProgress('Conectando ao Google Drive');const conn=await this.ensureConnection(interactive);onProgress('Localizando a base oficial');const file=this.currentFile||await this.findDataFile();if(!file){onProgress('Criando a primeira base oficial');const result=await saveDataFile(conn.structure.data,localState,{reason:'primeira-base-oficial'});this.currentFile=result.file;if(window.MarcoStorage?.saveSyncBase)await window.MarcoStorage.saveSyncBase(result.state);return {state:result.state,created:true,source:'local',user:conn.user};}onProgress('Validando dados oficiais');const previousSyncBase=await window.MarcoStorage?.loadSyncBase?.();const remote=await this.load({rememberBase:false});onProgress('Comparando versões');ensureCompanyId(remote.state);const decision=decideOfficialSource(localState,remote.state);if(decision.foreignInstance)console.warn('[GOOGLE_DRIVE] Identificador de instância local diverge do oficial; a revisão decide qual base prevalece, sem descartar automaticamente.');
       /* V2.4.0 — o login (submitLogin/connectGoogle) roda toda vez que a pessoa entra
          no app, não só na primeira conexão. Antes, sempre que já existisse um arquivo
          no Drive, a base local era descartada na hora — mesmo que tivesse exclusões
@@ -347,11 +396,20 @@
          reaparecerem sozinhos a cada login/recarregamento. Agora só adota a base do
          Drive se ela for realmente mais nova (ver decideOfficialSource); senão, envia
          a base local (mais nova ou igual) — mesmo critério que o botão "Sincronizar". */
-      if(decision.useRemote){onProgress('Sincronizando registros');return {state:remote.state,created:false,source:'drive',user:conn.user,discardedLocalInstance:decision.foreignInstance};}
+      if(decision.useRemote){
+        const localChanged=!!previousSyncBase&&await contentChecksum(localState)!==await contentChecksum(previousSyncBase);
+        if(localChanged&&!decision.foreignInstance){
+          onProgress('Conciliando alterações entre dispositivos');
+          const rebased=rebaseLocalChanges(previousSyncBase,localState,remote.state),result=await saveDataFile(conn.structure.data,rebased,{reason:'login-reconciliado'});
+          this.currentFile=result.file;if(window.MarcoStorage?.saveSyncBase)await window.MarcoStorage.saveSyncBase(result.state);
+          return {state:result.state,created:false,source:'merged',user:conn.user,discardedLocalInstance:false};
+        }
+        onProgress('Sincronizando registros');if(window.MarcoStorage?.saveSyncBase)await window.MarcoStorage.saveSyncBase(remote.state);return {state:remote.state,created:false,source:'drive',user:conn.user,discardedLocalInstance:decision.foreignInstance};
+      }
       onProgress('Enviando alterações locais mais recentes');
       try{
         const result=await saveDataFile(conn.structure.data,localState,{reason:'login-local-mais-recente'});
-        this.currentFile=result.file;
+        this.currentFile=result.file;if(window.MarcoStorage?.saveSyncBase)await window.MarcoStorage.saveSyncBase(result.state);
         return {state:result.state,created:false,source:'local',user:conn.user,discardedLocalInstance:false};
       }catch(pushError){
         // V2.4.0 — a revisão local pode empatar/ganhar mesmo com a base local vazia
@@ -364,13 +422,13 @@
         if(['EMPTY_BASE_BLOCKED','SUSPICIOUS_DROP'].includes(pushError?.code)){
           console.warn('[GOOGLE_DRIVE] Envio da base local bloqueado por segurança ('+pushError.code+'); carregando a base do Drive em vez de travar o login.',pushError);
           onProgress('Base local vazia; carregando dados existentes do Drive');
-          return {state:remote.state,created:false,source:'drive',user:conn.user,discardedLocalInstance:false,localPushBlocked:pushError.code};
+          if(window.MarcoStorage?.saveSyncBase)await window.MarcoStorage.saveSyncBase(remote.state);return {state:remote.state,created:false,source:'drive',user:conn.user,discardedLocalInstance:false,localPushBlocked:pushError.code};
         }
         throw pushError;
       }
     },
-    async sync(state,{interactive=false,backup=false,reason='sincronizacao'}={}){await this.ensureConnection(interactive);const f=this.currentFile||await this.findDataFile();if(!f){await this.save(state,{backup:true,reason:'primeira-sincronizacao'});return {direction:'local',created:true};}const remote=await this.load();const localRev=Math.max(0,Number(state?.driveSync?.revision)||0),remoteRev=Math.max(0,Number(remote.state?.driveSync?.revision)||0);if(remoteRev>localRev)return {direction:'remote',state:remote.state,meta:remote.meta};await this.save(state,{backup,reason});return {direction:'local',meta:this.currentFile};},
-    /* v2.4.3 — consulta passiva entre dispositivos. Lê a base oficial e só a aplica
+    async sync(state,{interactive=false,backup=false,reason='sincronizacao'}={}){await this.ensureConnection(interactive);const f=this.currentFile||await this.findDataFile();if(!f){await this.save(state,{backup:true,reason:'primeira-sincronizacao'});return {direction:'local',created:true};}const previousSyncBase=await window.MarcoStorage?.loadSyncBase?.(),remote=await this.load({rememberBase:false});const localRev=Math.max(0,Number(state?.driveSync?.revision)||0),remoteRev=Math.max(0,Number(remote.state?.driveSync?.revision)||0);if(remoteRev>localRev){const localChanged=!!previousSyncBase&&await contentChecksum(state)!==await contentChecksum(previousSyncBase);if(localChanged){await this.save(state,{backup,reason:`reconciliado-${reason}`});return {direction:'merged',state,meta:this.currentFile};}if(window.MarcoStorage?.saveSyncBase)await window.MarcoStorage.saveSyncBase(remote.state);return {direction:'remote',state:remote.state,meta:remote.meta};}await this.save(state,{backup,reason});return {direction:'local',meta:this.currentFile};},
+    /* v2.4.4 — consulta passiva entre dispositivos. Lê a base oficial e só a aplica
        quando a revisão do Drive é maior; não salva, não incrementa revisão e não
        publica o bridge. Isso impede o computador ocioso de sobrescrever o celular. */
     async pullIfNewer(state,{interactive=false}={}){
@@ -389,8 +447,8 @@
       if(localCompany&&remoteCompany&&localCompany!==remoteCompany){const error=new Error('A base remota pertence a outra instalação. A atualização automática foi bloqueada.');error.code='COMPANY_INSTANCE_CONFLICT';throw error;}
       const localRev=Math.max(0,Number(state?.driveSync?.revision)||0),remoteRev=Math.max(0,Number(remoteState?.driveSync?.revision)||0);
       if(remoteRev<=localRev)return {updated:false,localRev,remoteRev,meta:latestMeta};
-      const startedUpdatedAt=String(state.updatedAt||'');
-      await applyConfirmedState(state,remoteState,startedUpdatedAt);
+      const startedSnapshot=jsonClone(state);
+      await applyConfirmedState(state,remoteState,startedSnapshot);
       return {updated:true,localRev,remoteRev,meta:latestMeta,state};
     },
     async uploadBlob(blob,folderKey,fileName,existingId=''){const {structure}=await this.ensureConnection(false);const parent=structure[folderKey];if(!parent)throw new Error('Pasta de nuvem inválida.');let f=existingId?await meta(existingId).catch(()=>null):await findChild(parent,fileName);if(!f)f=await createMetadata({name:fileName,mimeType:blob.type||'application/octet-stream',parents:[parent]});return await uploadMediaContent(f.id,blob);},
@@ -404,8 +462,8 @@
     async writeAutosave(state,{force=false}={}){const {structure}=await this.ensureConnection(false);return await writeRotatingBackup(structure.backups,state,{kind:'autosave',force});},
     async writeForceSave(state){const {structure}=await this.ensureConnection(false);return await writeRotatingBackup(structure.backups,state,{kind:'forcesave',force:true});},
     async diagnose(state){const conn=await this.ensureConnection(false),main=await this.findDataFile(),bridge=await this.readIntegrationJson('marco-iris.bridge.json');return {ok:!!(main&&bridge),user:conn.user,rootId:conn.rootId,folders:await this.folderStatus(),mainFile:main||null,bridgeFile:bridge?{revision:Number(bridge.revision)||0,recordCount:Number(bridge.recordCount)||0,generatedAt:bridge.generatedAt||'',companyInstanceId:bridge.companyInstanceId||bridge.instanceId||''}:null,companyInstanceId:companyIdOf(state),lastSave:localStorage.getItem(LAST_SAVE)||''};},
-    disconnect(){const u=Auth.cached(),root=rootId();if(u)localStorage.removeItem(rootKey(u.sub));if(root)localStorage.removeItem(structKey(root));for(let i=localStorage.length-1;i>=0;i--){const key=localStorage.key(i)||'';if(key.startsWith('marco_iris_v240_'))localStorage.removeItem(key);}this.currentFile=null;structurePromise=null;connectionPromise=null;integrationFileIds.clear();integrationFilePromises.clear();dataFilePromises.clear();saveQueueRequested=saveQueueCompleted=0;saveQueueState=null;saveQueueOptions={};saveQueueWaiters=[];Auth.signOut();},
-    __test:{applyConfirmedState,prepareOfficialState,assertSafeReplacement,validateOfficialState,decideOfficialSource,explicitLocalDeletionCoverage,writeRotatingBackup,enqueueSave,flushSaveQueue}
+    disconnect(){const u=Auth.cached(),root=rootId();if(u)localStorage.removeItem(rootKey(u.sub));if(root)localStorage.removeItem(structKey(root));for(let i=localStorage.length-1;i>=0;i--){const key=localStorage.key(i)||'';if(key.startsWith('marco_iris_v240_'))localStorage.removeItem(key);}window.MarcoStorage?.clearSyncBase?.().catch?.(()=>{});this.currentFile=null;structurePromise=null;connectionPromise=null;integrationFileIds.clear();integrationFilePromises.clear();dataFilePromises.clear();saveQueueRequested=saveQueueCompleted=0;saveQueueState=null;saveQueueOptions={};saveQueueWaiters=[];Auth.signOut();},
+    __test:{applyConfirmedState,prepareOfficialState,assertSafeReplacement,validateOfficialState,decideOfficialSource,explicitLocalDeletionCoverage,contentChecksum,rebaseLocalChanges,mergeArrayDelta,writeRotatingBackup,enqueueSave,flushSaveQueue}
   };
   window.GoogleDriveMarco=Drive;
 })();
