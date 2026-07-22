@@ -135,8 +135,8 @@
       clearTimeout(this.networkTimer);
       banner.className=`marco-network-banner ${online?'is-online':'is-offline'} is-visible`;
       banner.innerHTML=online
-        ? '<span class="network-dot"></span><strong>Conexão restaurada</strong><small>A sincronização continuará normalmente.</small>'
-        : '<span class="network-dot"></span><strong>Você está offline</strong><small>O sistema continua disponível neste aparelho.</small>';
+        ? '<span class="network-dot"></span><strong>Conexão restaurada</strong><small>Recarregue para buscar a base oficial do Google Drive.</small>'
+        : '<span class="network-dot"></span><strong>Internet indisponível</strong><small>O aplicativo foi bloqueado e não permite alterações offline.</small>';
       if(online)this.networkTimer=setTimeout(()=>banner.classList.remove('is-visible'),2600);
     },
 

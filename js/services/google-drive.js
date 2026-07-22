@@ -108,11 +108,14 @@
     next.driveSync=Object.assign({},next.driveSync||{},{schemaVersion:1,companyInstanceId:companyIdOf(next),revision:Math.max(currentRev,remoteRev)+1,previousRevision:remoteRev,updatedByDevice:window.MarcoBorionInterop?.getRuntimeStatus?.().deviceId||'',updatedAt:new Date().toISOString()});
     next.updatedAt=new Date().toISOString();next.driveSync.checksum=await stateChecksum(next);return next;
   }
-  function assertSafeReplacement(localState,remoteState){
-    const localCheck=validateOfficialState(localState),remoteCheck=validateOfficialState(remoteState);if(!localCheck.valid)throw new Error('A base local é inválida: '+localCheck.errors.join(' '));if(!remoteCheck.valid)throw new Error('A base oficial do Drive é inválida: '+remoteCheck.errors.join(' '));
-    const lc=companyIdOf(localState),rc=companyIdOf(remoteState);if(rc&&lc&&rc!==lc){const e=new Error('Conflito de instalação: o identificador oficial da empresa é diferente. Nenhum dado foi enviado.');e.code='COMPANY_INSTANCE_CONFLICT';throw e;}
-    if(remoteCheck.count>0&&localCheck.count===0&&!explicitLocalDeletionCoverage(localState,remoteState)){const e=new Error('A base local está vazia, mas o Google Drive contém dados. A publicação foi bloqueada para evitar perda de informações.');e.code='EMPTY_BASE_BLOCKED';throw e;}
-    const known=Math.max(0,Number(localState?.driveSync?.revision)||0),remoteRev=Math.max(0,Number(remoteState?.driveSync?.revision)||0);if(remoteRev>known){const e=new Error('O Google Drive possui uma revisão mais nova. Carregue a base oficial antes de salvar.');e.code='REMOTE_NEWER';throw e;}
+  function assertSafeReplacement(sessionState,remoteState){
+    const sessionCheck=validateOfficialState(sessionState),remoteCheck=validateOfficialState(remoteState);
+    if(!sessionCheck.valid)throw new Error('A sessão atual é inválida: '+sessionCheck.errors.join(' '));
+    if(!remoteCheck.valid)throw new Error('A base oficial do Drive é inválida: '+remoteCheck.errors.join(' '));
+    const sc=companyIdOf(sessionState),rc=companyIdOf(remoteState);
+    if(rc&&sc&&rc!==sc){const e=new Error('Conflito de instalação: o identificador oficial da empresa é diferente. Nenhum dado foi enviado.');e.code='COMPANY_INSTANCE_CONFLICT';throw e;}
+    const known=Math.max(0,Number(sessionState?.driveSync?.revision)||0),remoteRev=Math.max(0,Number(remoteState?.driveSync?.revision)||0);
+    if(remoteRev>known){const e=new Error('O Google Drive possui uma revisão mais nova. A alteração será conciliada com a base oficial.');e.code='REMOTE_NEWER';throw e;}
     return true;
   }
 
@@ -252,7 +255,7 @@
   }
   async function writeInstallationManifest(rootIdValue,structure,state,user){
     if(!rootIdValue||!structure||!state)return null;
-    const manifest={schema:'marco.iris.installation',schemaVersion:1,appId:'marco-iris-tecnologia',appVersion:'2.4.4',createdOrUpdatedAt:new Date().toISOString(),companyInstanceId:companyIdOf(state),googleAccount:String(user?.email||''),rootFolderId:rootIdValue,folders:Object.fromEntries(Object.entries(FOLDERS).map(([key,name])=>[key,{name,id:structure[key]||''}]))};
+    const manifest={schema:'marco.iris.installation',schemaVersion:1,appId:'marco-iris-tecnologia',appVersion:'2.5.0',createdOrUpdatedAt:new Date().toISOString(),companyInstanceId:companyIdOf(state),googleAccount:String(user?.email||''),rootFolderId:rootIdValue,folders:Object.fromEntries(Object.entries(FOLDERS).map(([key,name])=>[key,{name,id:structure[key]||''}]))};
     const file=await resolveIntegrationFile(rootIdValue,INSTALLATION_FILE,true,manifest);
     await updateJson(file.id,manifest);
     const confirmed=await readJson(file.id);
@@ -291,6 +294,26 @@
         /* Abrir outro dispositivo não pode fabricar uma revisão nova. Se os dados
            funcionais são idênticos, adotamos a confirmação oficial existente. */
         if(await contentChecksum(state)===await contentChecksum(remoteState))return {file:rememberDataFile(folderId,file),state:remoteState,unchanged:true};
+        /* No modo 100% nuvem, uma gravação só é aceita depois que esta aba carregou
+           a base oficial do Drive para a memória. Se essa referência não existe,
+           a nuvem vence automaticamente — jamais tentamos publicar uma base inicial
+           vazia criada pelo navegador. */
+        const sessionBase=await window.MarcoStorage?.loadSyncBase?.();
+        if(!sessionBase){
+          return {file:rememberDataFile(folderId,file),state:remoteState,unchanged:true,recoveredFromUninitializedSession:true};
+        }
+        const sessionCompany=companyIdOf(sessionBase),remoteCompany=companyIdOf(remoteState);
+        if(sessionCompany&&remoteCompany&&sessionCompany!==remoteCompany){
+          const e=new Error('A pasta selecionada pertence a outra instalação. Nenhum dado foi enviado.');e.code='COMPANY_INSTANCE_CONFLICT';throw e;
+        }
+        const sessionCount=sourceCount(state),remoteCount=sourceCount(remoteState);
+        if(remoteCount>0&&sessionCount===0&&!explicitLocalDeletionCoverage(state,remoteState)){
+          const reasonText=String(reason||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+          const destructive=/exclu|cancel|remov|reset|rollback|restaur|apag/.test(reasonText);
+          if(!destructive){
+            return {file:rememberDataFile(folderId,file),state:remoteState,unchanged:true,recoveredFromEmptySession:true};
+          }
+        }
         assertSafeReplacement(state,remoteState);
       }
       else if(!allowCreate)throw new Error('A base oficial não foi localizada no Google Drive.');
@@ -380,59 +403,41 @@
            infinita, reaplicamos apenas as mudanças locais sobre a base remota. */
         const file=this.currentFile||await resolveDataFile(structure.data);if(!file)throw error;
         const remoteState=await readJson(file.id),baseState=await window.MarcoStorage?.loadSyncBase?.();
-        if(!baseState){const e=new Error('O Google Drive foi alterado em outro dispositivo, mas a base de reconciliação local não foi localizada. Atualize o aplicativo antes de editar novamente.');e.code='SYNC_BASE_MISSING';throw e;}
+        if(!baseState){const e=new Error('O Google Drive foi alterado em outro dispositivo, mas a referência desta sessão não está disponível. Reabra o aplicativo para carregar novamente a base oficial.');e.code='SYNC_BASE_MISSING';throw e;}
         const rebased=rebaseLocalChanges(baseState,startedSnapshot,remoteState);
         result=await saveDataFile(structure.data,rebased,{reason:`reconciliado-${reason}`});
       }
       this.currentFile=result.file;await applyConfirmedState(state,result.state,startedSnapshot);localStorage.setItem(LAST_SAVE,new Date().toISOString());await writeInstallationManifest(connectedRoot,structure,result.state,user);if(backup){await writeRotatingBackup(structure.backups,result.state,{kind:'forcesave',force:true});const name=`Marco_Iris_${String(reason).replace(/[^a-zA-Z0-9_-]/g,'-')}_${stamp()}.json`;const bf=await createMetadata({name,mimeType:'application/json',parents:[structure.backups]});await updateJson(bf.id,result.state);}return result.file;
     },
     async load({interactive=false,rememberBase=true}={}){await this.ensureConnection(interactive);const f=this.currentFile||await this.findDataFile();if(!f)throw new Error('Ainda não existe um arquivo de dados nesta pasta.');const [state,info]=await Promise.all([readJson(f.id),meta(f.id)]);const check=validateOfficialState(state);if(!check.valid)throw new Error('A base oficial do Google Drive é inválida: '+check.errors.join(' '));ensureCompanyId(state);this.currentFile=info;if(rememberBase&&window.MarcoStorage?.saveSyncBase)await window.MarcoStorage.saveSyncBase(state);return {state,meta:info};},
-    async initializeOfficialState(localState,{interactive=true,onProgress=()=>{}}={}){onProgress('Conectando ao Google Drive');const conn=await this.ensureConnection(interactive);onProgress('Localizando a base oficial');const file=this.currentFile||await this.findDataFile();if(!file){onProgress('Criando a primeira base oficial');const result=await saveDataFile(conn.structure.data,localState,{reason:'primeira-base-oficial'});this.currentFile=result.file;if(window.MarcoStorage?.saveSyncBase)await window.MarcoStorage.saveSyncBase(result.state);return {state:result.state,created:true,source:'local',user:conn.user};}onProgress('Validando dados oficiais');const previousSyncBase=await window.MarcoStorage?.loadSyncBase?.();const remote=await this.load({rememberBase:false});onProgress('Comparando versões');ensureCompanyId(remote.state);const decision=decideOfficialSource(localState,remote.state);if(decision.foreignInstance)console.warn('[GOOGLE_DRIVE] Identificador de instância local diverge do oficial; a revisão decide qual base prevalece, sem descartar automaticamente.');
-      /* V2.4.0 — o login (submitLogin/connectGoogle) roda toda vez que a pessoa entra
-         no app, não só na primeira conexão. Antes, sempre que já existisse um arquivo
-         no Drive, a base local era descartada na hora — mesmo que tivesse exclusões
-         ou edições feitas há poucos segundos e ainda não enviadas (a fila de autosave
-         para o Drive tem ~1,9s de espera). Isso fazia lançamentos "excluídos"
-         reaparecerem sozinhos a cada login/recarregamento. Agora só adota a base do
-         Drive se ela for realmente mais nova (ver decideOfficialSource); senão, envia
-         a base local (mais nova ou igual) — mesmo critério que o botão "Sincronizar". */
-      if(decision.useRemote){
-        const localChanged=!!previousSyncBase&&await contentChecksum(localState)!==await contentChecksum(previousSyncBase);
-        if(localChanged&&!decision.foreignInstance){
-          onProgress('Conciliando alterações entre dispositivos');
-          const rebased=rebaseLocalChanges(previousSyncBase,localState,remote.state),result=await saveDataFile(conn.structure.data,rebased,{reason:'login-reconciliado'});
-          this.currentFile=result.file;if(window.MarcoStorage?.saveSyncBase)await window.MarcoStorage.saveSyncBase(result.state);
-          return {state:result.state,created:false,source:'merged',user:conn.user,discardedLocalInstance:false};
-        }
-        onProgress('Sincronizando registros');if(window.MarcoStorage?.saveSyncBase)await window.MarcoStorage.saveSyncBase(remote.state);return {state:remote.state,created:false,source:'drive',user:conn.user,discardedLocalInstance:decision.foreignInstance};
+    async initializeOfficialState(initialState,{interactive=true,onProgress=()=>{}}={}){
+      if(!navigator.onLine)throw new Error('Internet obrigatória para abrir o Marco Iris.');
+      onProgress('Conectando ao Google Drive');
+      const conn=await this.ensureConnection(interactive);
+      onProgress('Localizando a base oficial');
+      const file=this.currentFile||await this.findDataFile();
+      if(!file){
+        onProgress('Criando a primeira base oficial');
+        const cleanState=jsonClone(initialState||window.MARCO_INITIAL_DATA);
+        ensureCompanyId(cleanState);
+        const result=await saveDataFile(conn.structure.data,cleanState,{reason:'primeira-base-oficial-cloud-only'});
+        this.currentFile=result.file;
+        if(window.MarcoStorage?.saveSyncBase)await window.MarcoStorage.saveSyncBase(result.state);
+        return {state:result.state,created:true,source:'drive-created',user:conn.user};
       }
-      onProgress('Enviando alterações locais mais recentes');
-      try{
-        const result=await saveDataFile(conn.structure.data,localState,{reason:'login-local-mais-recente'});
-        this.currentFile=result.file;if(window.MarcoStorage?.saveSyncBase)await window.MarcoStorage.saveSyncBase(result.state);
-        return {state:result.state,created:false,source:'local',user:conn.user,discardedLocalInstance:false};
-      }catch(pushError){
-        // V2.4.0 — a revisão local pode empatar/ganhar mesmo com a base local vazia
-        // (ex.: logo após um reset manual, antes de qualquer lançamento novo). Nesse
-        // caso o guard de segurança (assertSafeReplacement/EMPTY_BASE_BLOCKED ou
-        // SUSPICIOUS_DROP) corretamente recusa apagar dados reais do Drive — mas
-        // travar o LOGIN inteiro por causa disso é pior do que simplesmente carregar
-        // a base do Drive agora. Só cai aqui nesses dois códigos específicos de
-        // segurança; qualquer outro erro (rede, permissão) continua sendo repassado.
-        if(['EMPTY_BASE_BLOCKED','SUSPICIOUS_DROP'].includes(pushError?.code)){
-          console.warn('[GOOGLE_DRIVE] Envio da base local bloqueado por segurança ('+pushError.code+'); carregando a base do Drive em vez de travar o login.',pushError);
-          onProgress('Base local vazia; carregando dados existentes do Drive');
-          if(window.MarcoStorage?.saveSyncBase)await window.MarcoStorage.saveSyncBase(remote.state);return {state:remote.state,created:false,source:'drive',user:conn.user,discardedLocalInstance:false,localPushBlocked:pushError.code};
-        }
-        throw pushError;
-      }
+      onProgress('Carregando dados oficiais da nuvem');
+      const remote=await this.load({rememberBase:false});
+      ensureCompanyId(remote.state);
+      if(window.MarcoStorage?.saveSyncBase)await window.MarcoStorage.saveSyncBase(remote.state);
+      onProgress('Base oficial confirmada');
+      return {state:remote.state,created:false,source:'drive',user:conn.user,discardedLocalInstance:true};
     },
     async sync(state,{interactive=false,backup=false,reason='sincronizacao'}={}){await this.ensureConnection(interactive);const f=this.currentFile||await this.findDataFile();if(!f){await this.save(state,{backup:true,reason:'primeira-sincronizacao'});return {direction:'local',created:true};}const previousSyncBase=await window.MarcoStorage?.loadSyncBase?.(),remote=await this.load({rememberBase:false});const localRev=Math.max(0,Number(state?.driveSync?.revision)||0),remoteRev=Math.max(0,Number(remote.state?.driveSync?.revision)||0);if(remoteRev>localRev){const localChanged=!!previousSyncBase&&await contentChecksum(state)!==await contentChecksum(previousSyncBase);if(localChanged){await this.save(state,{backup,reason:`reconciliado-${reason}`});return {direction:'merged',state,meta:this.currentFile};}if(window.MarcoStorage?.saveSyncBase)await window.MarcoStorage.saveSyncBase(remote.state);return {direction:'remote',state:remote.state,meta:remote.meta};}await this.save(state,{backup,reason});return {direction:'local',meta:this.currentFile};},
-    /* v2.4.4 — consulta passiva entre dispositivos. Lê a base oficial e só a aplica
+    /* v2.5.0 — consulta passiva entre dispositivos. Lê a base oficial e só a aplica
        quando a revisão do Drive é maior; não salva, não incrementa revisão e não
        publica o bridge. Isso impede o computador ocioso de sobrescrever o celular. */
     async pullIfNewer(state,{interactive=false}={}){
-      if(!state)throw new Error('Estado local indisponível para atualização.');
+      if(!state)throw new Error('Sessão atual indisponível para atualização.');
       await this.ensureConnection(interactive);
       const file=this.currentFile||await this.findDataFile();
       if(!file)throw new Error('Ainda não existe um arquivo de dados nesta pasta.');

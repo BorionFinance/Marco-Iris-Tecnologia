@@ -1,47 +1,13 @@
-const CACHE='marco-iris-v2.4.4-reinstalacao-limpa-drive';
-const CORE=[
-  './',
-  './index.html',
-  './css/app.css?v=2.4.4',
-  "./css/borion-hub.css?v=2.4.4",
-  './css/mobile-borion.css?v=2.4.4',
-  './css/pts-completo.css?v=2.4.4',
-  './css/validacao-final.css?v=2.4.4',
-  './css/personalization-v221.css?v=2.4.4',
-  './css/v227-corrections.css?v=2.4.4',
-  './js/data/initial-data.js?v=2.4.4',
-  "./js/borion-hub.js?v=2.4.4",
-  './js/services/storage.js?v=2.4.4',
-  './js/services/identifiers.js?v=2.4.4',
-  './js/services/phone.js?v=2.4.4',
-  './js/services/money.js?v=2.4.4',
-  './js/services/finance-status.js?v=2.4.4',
-  './js/services/stock-health.js?v=2.4.4',
-  './js/services/google-drive.js?v=2.4.4',
-  './js/vendor/qrcode-local.js?v=2.4.4',
-  './js/services/pdf.js?v=2.4.4',
-  './js/services/borion-interop-source.js?v=2.4.4',
-  './js/app.js?v=2.4.4',
-  './js/personalization-v221.js?v=2.4.4',
-  './js/pts-completo.js?v=2.4.4',
-  './js/mobile-experience.js?v=2.4.4',
-  './js/v227-corrections.js?v=2.4.4',
-  './manifest.json',
-  './icon-192.png',
-  './icon-512.png',
-  './apple-touch-icon.png',
-  './assets/marco-banner.jpg',
-  './assets/marco-symbol.png'
-];
+const CLOUD_ONLY_VERSION='marco-iris-v2.5.0-cloud-only';
 
 self.addEventListener('install',event=>{
-  event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(CORE)).then(()=>self.skipWaiting()));
+  event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener('activate',event=>{
   event.waitUntil(
     caches.keys()
-      .then(keys=>Promise.all(keys.filter(key=>key.startsWith('marco-iris-')&&key!==CACHE).map(key=>caches.delete(key))))
+      .then(keys=>Promise.all(keys.filter(key=>key.startsWith('marco-iris-')).map(key=>caches.delete(key))))
       .then(()=>self.clients.claim())
   );
 });
@@ -49,28 +15,12 @@ self.addEventListener('activate',event=>{
 self.addEventListener('fetch',event=>{
   const request=event.request;
   if(request.method!=='GET'||!request.url.startsWith(self.location.origin))return;
-
-  // Navegação e arquivos de código usam rede primeiro para evitar versões antigas no GitHub Pages.
-  const url=new URL(request.url);
-  const isCode=request.mode==='navigate'||/\.(?:html|css|js)$/.test(url.pathname);
-  if(isCode){
-    event.respondWith(
-      fetch(request,{cache:'no-store'})
-        .then(response=>{
-          const copy=response.clone();
-          caches.open(CACHE).then(cache=>cache.put(request,copy));
-          return response;
-        })
-        .catch(()=>caches.match(request).then(hit=>hit||caches.match('./index.html')))
-    );
-    return;
-  }
-
   event.respondWith(
-    caches.match(request).then(hit=>hit||fetch(request).then(response=>{
-      const copy=response.clone();
-      caches.open(CACHE).then(cache=>cache.put(request,copy));
-      return response;
-    }))
+    fetch(request,{cache:'no-store'}).catch(()=>{
+      if(request.mode==='navigate'){
+        return new Response(`<!doctype html><html lang="pt-BR"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Internet obrigatória</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#02152c;color:#eef7ff;font-family:Segoe UI,Arial,sans-serif;padding:24px}.box{max-width:560px;padding:30px;border:1px solid #28507a;border-radius:24px;background:#09284a;text-align:center}p{color:#b9cee3;line-height:1.55}button{border:0;border-radius:14px;padding:13px 20px;background:#1672e8;color:white;font-weight:700}</style><div class="box"><h1>Internet obrigatória</h1><p>O Marco Iris usa o Google Drive como única base oficial. Nenhum dado é aberto ou salvo offline.</p><button onclick="location.reload()">Tentar novamente</button></div>`,{status:503,headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'}});
+      }
+      return new Response('Internet obrigatória.',{status:503,headers:{'Cache-Control':'no-store'}});
+    })
   );
 });

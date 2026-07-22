@@ -11,7 +11,7 @@
   </style>
 </head>
 <body>
-  <main class="box"><div class="spinner"></div><h1>Atualizando o sistema</h1><p id="status">Removendo a versão antiga e preparando a interface v2.4.4…</p></main>
+  <main class="box"><div class="spinner"></div><h1>Atualizando o sistema</h1><p id="status">Removendo a versão antiga e preparando a interface v2.5.0…</p></main>
   <script>
     (async()=>{
       try{
@@ -24,11 +24,15 @@
           const keys=await caches.keys();
           await Promise.all(keys.filter(key=>key.startsWith('marco-iris-')).map(key=>caches.delete(key)));
         }
-        document.getElementById('status').innerHTML='<span class="ok">Atualização concluída.</span><br>Abrindo a nova tela futurista…';
+        if('indexedDB' in window){
+          const legacy=['marco_iris_tecnologia_db_v240_clean','marco_iris_tecnologia_db','marco_iris_tecnologia'];
+          await Promise.all(legacy.map(name=>new Promise(resolve=>{const request=indexedDB.deleteDatabase(name);request.onsuccess=request.onerror=request.onblocked=()=>resolve();})));
+        }
+        document.getElementById('status').innerHTML='<span class="ok">Atualização concluída.</span><br>Abrindo o modo 100% Google Drive…';
       }catch(e){
         document.getElementById('status').textContent='A limpeza automática terminou com uma pendência. O sistema será aberto mesmo assim.';
       }
-      setTimeout(()=>location.replace('./?v=2.4.4&cache='+Date.now()),900);
+      setTimeout(()=>location.replace('./?v=2.5.0&cache='+Date.now()),900);
     })();
   </script>
 </body>

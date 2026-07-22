@@ -14,6 +14,8 @@ let AUTOSAVE_TIMER=null;
 let GOOGLE_TIMER=null;
 let CLOUD_RETRY_TIMER=null;
 let CLOUD_PENDING_LOCAL=false;
+let LAST_CONFIRMED_STATE=null;
+let CLOUD_ONLY_COMMITTING=false;
 let AUTO_BACKUP_TIMER=null;
 let REMOTE_REFRESH_TIMER=null;
 let REMOTE_REFRESH_INFLIGHT=null;
@@ -89,7 +91,7 @@ function normalizeState(){
   STATE.activeProfileId=STATE.activeProfileId||STATE.profiles[0].id;STATE.dataByProfile=STATE.dataByProfile||{};
   if(!STATE.dataByProfile[STATE.activeProfileId])STATE.dataByProfile[STATE.activeProfileId]=clone(window.MARCO_INITIAL_DATA.dataByProfile.marco);
   const d=data();['clients','serviceOrders','orderItems','payments','products','services','supplies','stockMovements','appointments','attachments','consents','audit'].forEach(k=>{if(!Array.isArray(d[k]))d[k]=[];});
-  d.settings=d.settings||{};Object.assign(d.settings,{autosaveFolder:d.settings.autosaveFolder!==false,autosaveGoogle:d.settings.autosaveGoogle!==false,interfaceMode:d.settings.interfaceMode||'auto',dashboardPrivacy:!!d.settings.dashboardPrivacy,generatePaymentOnComplete:!!d.settings.generatePaymentOnComplete,preventNegativeStock:d.settings.preventNegativeStock!==false,nextIds:d.settings.nextIds||{}});
+  d.settings=d.settings||{};Object.assign(d.settings,{autosaveFolder:false,autosaveGoogle:true,cloudOnly:true,interfaceMode:d.settings.interfaceMode||'auto',dashboardPrivacy:!!d.settings.dashboardPrivacy,generatePaymentOnComplete:!!d.settings.generatePaymentOnComplete,preventNegativeStock:d.settings.preventNegativeStock!==false,nextIds:d.settings.nextIds||{}});
   d.settings.viewModesBySection={...VIEW_MODE_DEFAULTS,...(d.settings.viewModesBySection||{})};
   if(!AGENDA_CURSOR)AGENDA_CURSOR=today().slice(0,7);
   if(!AGENDA_SELECTED)AGENDA_SELECTED=today();
@@ -111,22 +113,35 @@ async function publishBridgeConfirmed(){
   return result;
 }
 async function flushCloudState(reason='alteracao',{backup=false,retryMedia=true}={}){
-  if(!window.GoogleDriveMarco?.isConfigured?.())return {skipped:true};
+  if(!navigator.onLine)throw new Error('Internet obrigatória. A alteração não foi salva.');
+  if(!window.GoogleDriveMarco?.isConfigured?.())throw new Error('Google Drive desconectado. Entre novamente antes de alterar dados.');
   if(retryMedia)await syncPendingMedia();
   window.MarcoBorionInterop?.prepareState?.(STATE);
-  await MarcoStorage.save(STATE,{touch:false});
-  await GoogleDriveMarco.enqueueSave(STATE,{backup,reason:cloudReason(reason)});
-  /* A base principal já foi confirmada. O bridge pode atualizar carimbos locais,
-     mas isso não significa que exista uma edição de negócio ainda pendente. */
-  CLOUD_PENDING_LOCAL=false;
-  const bridge=await publishBridgeConfirmed();
-  return {saved:true,bridge};
+  let baseCommitted=false;
+  try{
+    await GoogleDriveMarco.enqueueSave(STATE,{backup,reason:cloudReason(reason)});
+    baseCommitted=true;
+    CLOUD_PENDING_LOCAL=false;
+    const bridge=await publishBridgeConfirmed();
+    return {saved:true,bridge};
+  }catch(error){
+    error.baseCommitted=baseCommitted;
+    throw error;
+  }
 }
 function scheduleCloudRetry(reason='alteracao'){
   clearTimeout(CLOUD_RETRY_TIMER);
   CLOUD_RETRY_TIMER=setTimeout(async()=>{
-    try{await flushCloudState(`repeticao-${reason}`);CLOUD_PENDING_LOCAL=false;setSaveStatus('Google Drive e integração sincronizados','ok');}
-    catch(error){console.warn('[CLOUD_RETRY]',error);setSaveStatus('Salvo local · nuvem ainda pendente','warn');scheduleCloudRetry(reason);}
+    if(!navigator.onLine||!STATE||!GoogleDriveMarco.isConfigured())return;
+    try{
+      window.MarcoBorionInterop?.prepareState?.(STATE);
+      await publishBridgeConfirmed();
+      setSaveStatus('Google Drive e integração com Borion confirmados','ok');
+    }catch(error){
+      console.warn('[BRIDGE_RETRY]',error);
+      setSaveStatus('Dados no Drive · integração com Borion pendente','warn');
+      scheduleCloudRetry(reason);
+    }
   },5000);
 }
 function mergeBackgroundSaveOptions(current,next){
@@ -169,11 +184,10 @@ async function runBackgroundSaveQueue(){
             console.warn('[BACKGROUND_CLOUD]',error);result.errors.push(`Google Drive/integração: ${error.message}`);scheduleCloudRetry(opts.reason||'alteracao');
           }
         }
-        if(result.errors.length)setSaveStatus('Salvo local · nuvem pendente (nova tentativa em 5 s)','warn');
+        if(result.errors.length)setSaveStatus('Google Drive pendente · nova tentativa em 5 s','warn');
         else if(result.bridge)setSaveStatus('Drive + Borion_Integracoes confirmados','ok');
         else if(result.drive)setSaveStatus('Google Drive confirmado','ok');
-        else if(result.folder)setSaveStatus('Pasta local sincronizada','ok');
-        else setSaveStatus('Salvo localmente','ok');
+        else setSaveStatus('Nenhuma alteração pendente no Google Drive','ok');
         BACKGROUND_SAVE_COMPLETED=target;
         lastResult=result;
         settleBackgroundSaveWaiters(target,result,null);
@@ -198,27 +212,49 @@ function queueBackgroundSave(opts={}){
   return promise;
 }
 async function persist(action='',detail='',opts={}){
+  const confirmedBefore=LAST_CONFIRMED_STATE?clone(LAST_CONFIRMED_STATE):null;
+  const rollback=()=>{
+    if(!confirmedBefore)return;
+    STATE=clone(confirmedBefore);
+    normalizeState();
+    if(!LOCKED)renderView('none');
+  };
+  if(!navigator.onLine){rollback();throw new Error('Sem internet. O Marco Iris funciona somente conectado ao Google Drive e nenhuma alteração foi salva.');}
+  if(!GoogleDriveMarco.isConfigured()){rollback();throw new Error('Google Drive desconectado. Entre novamente antes de alterar dados.');}
   if(action)addAudit(action,detail);
-  /* A projeção da integração e os tombstones entram no MESMO salvamento local da
-     alteração. Assim, até uma atualização imediata da página preserva a exclusão
-     que ainda está a caminho do Google Drive/Borion. */
   window.MarcoBorionInterop?.prepareState?.(STATE);
-  await MarcoStorage.save(STATE);
-  if(opts.google!==false&&data().settings.autosaveGoogle&&GoogleDriveMarco.isConfigured())CLOUD_PENDING_LOCAL=true;
-  clearTimeout(AUTOSAVE_TIMER);
-  clearTimeout(GOOGLE_TIMER);
-  setSaveStatus('Salvo localmente · sincronizando em segundo plano','warn');
-  const queued=queueBackgroundSave({folder:opts.folder,google:opts.google,backup:!!opts.backup,media:opts.media,reason:action||detail||'alteracao'});
-  if(opts.awaitRemote===true)return await queued;
-  return {local:true,queued:true,folder:false,drive:false,bridge:false,errors:[]};
+  CLOUD_PENDING_LOCAL=true;
+  CLOUD_ONLY_COMMITTING=true;
+  setSaveStatus('Enviando alteração ao Google Drive…','warn');
+  try{
+    const result=await flushCloudState(action||detail||'alteracao',{backup:!!opts.backup,retryMedia:opts.media!==false});
+    LAST_CONFIRMED_STATE=clone(STATE);
+    await MarcoStorage.saveSyncBase?.(STATE);
+    clearTimeout(CLOUD_RETRY_TIMER);
+    setSaveStatus(result.bridge&&!result.bridge.skipped?'Drive + Borion_Integracoes confirmados':'Google Drive confirmado','ok');
+    return {cloud:true,drive:true,bridge:!!result.bridge&&!result.bridge.skipped,errors:[]};
+  }catch(error){
+    if(error.baseCommitted){
+      /* A base principal já está segura no Drive. Mantemos o estado confirmado e
+         repetimos somente a publicação do bridge, sem recriar ou perder registros. */
+      LAST_CONFIRMED_STATE=clone(STATE);
+      await MarcoStorage.saveSyncBase?.(STATE);
+      CLOUD_PENDING_LOCAL=false;
+      setSaveStatus('Dados no Drive · integração com Borion pendente','warn');
+      scheduleCloudRetry(action||detail||'alteracao');
+      return {cloud:true,drive:true,bridge:false,warning:error.message,errors:[error.message]};
+    }
+    rollback();
+    CLOUD_PENDING_LOCAL=false;
+    setSaveStatus('Alteração cancelada · Google Drive não confirmou','danger');
+    throw error;
+  }finally{
+    CLOUD_ONLY_COMMITTING=false;
+  }
 }
 
 function hasUnsyncedLocalState(){
-  if(!STATE)return false;
-  /* Não usamos STATE.updatedAt: a publicação do bridge atualiza carimbos técnicos
-     depois que a base principal já foi confirmada e isso bloqueava o polling para
-     sempre. Apenas mudanças de negócio realmente pendentes impedem uma carga remota. */
-  return CLOUD_PENDING_LOCAL||BACKGROUND_SAVE_COMPLETED<BACKGROUND_SAVE_REQUESTED||!!BACKGROUND_SAVE_PROMISE;
+  return !!CLOUD_ONLY_COMMITTING;
 }
 async function refreshFromDriveIfNewer({reason='intervalo'}={}){
   if(LOCKED||document.hidden||!STATE||!window.GoogleDriveMarco?.isConfigured?.())return {skipped:true,reason:'indisponivel'};
@@ -232,7 +268,8 @@ async function refreshFromDriveIfNewer({reason='intervalo'}={}){
       if(!result?.updated)return result||{updated:false};
       normalizeState();
       window.MarcoBorionInterop?.prepareState?.(STATE);
-      await MarcoStorage.save(STATE,{touch:false});
+      LAST_CONFIRMED_STATE=clone(STATE);
+      await MarcoStorage.saveSyncBase?.(STATE);
       if(!LOCKED)renderView('none');
       CLOUD_PENDING_LOCAL=false;
       setSaveStatus('Atualizado do Google Drive','ok');
@@ -593,34 +630,28 @@ async function submitLogin(form){
   const button=form?.querySelector('.login-enter'),original=button?.innerHTML||'';
   const progress=text=>{if(button?.isConnected)button.innerHTML=`<span class="login-spinner" aria-hidden="true"></span> ${esc(text)}…`;setSaveStatus(text,'warn');};
   LOGIN_GOOGLE_INFLIGHT=(async()=>{
+    if(!navigator.onLine)throw new Error('Sem internet. O Marco Iris depende 100% do Google Drive e não pode ser aberto offline.');
     await validateLoginPin(form);
     if(!window.GoogleDriveMarco?.initializeOfficialState)throw new Error('O login seguro do Google Drive ainda não está disponível. Atualize a página e tente novamente.');
     window.MarcoBorionInterop?.setNotReady?.('Aguardando carregamento da base oficial.');
     if(button){button.disabled=true;button.classList.add('is-loading');}
     progress('Conectando ao Google Drive');
-    /* initializeOfficialState já autentica, confirma a conta e localiza a pasta.
-       Evitar authenticate() antes dela elimina uma segunda consulta ao Google no
-       mesmo clique e reduz sensivelmente o tempo de entrada. */
-    const localBefore=clone(STATE);
-    const result=await window.GoogleDriveMarco.initializeOfficialState(STATE,{interactive:true,onProgress:progress});
-    progress('Validando dados');
-    if(result.source==='drive')await MarcoStorage.createBackup(localBefore,'antes-da-carga-oficial-login');
+    const result=await window.GoogleDriveMarco.initializeOfficialState(clone(window.MARCO_INITIAL_DATA),{interactive:true,onProgress:progress});
+    progress('Validando dados oficiais');
     STATE=result.state;
     await backupStateBeforeV220Migration(STATE,'login-drive-oficial');
     normalizeState();
-    window.MarcoBorionInterop?.prepareState?.(STATE);
-    await MarcoStorage.save(STATE,{touch:false});
+    LAST_CONFIRMED_STATE=clone(STATE);
+    await MarcoStorage.saveSyncBase?.(STATE);
     CLOUD_PENDING_LOCAL=false;
     window.MarcoBorionInterop?.resume?.('offline-mode');
+    window.MarcoBorionInterop?.prepareState?.(STATE);
     window.MarcoBorionInterop?.setReady?.(STATE,{companyInstanceId:STATE?.interconnections?.borion?.companyInstanceId||STATE?.interconnections?.borion?.instanceId});
+    progress('Confirmando integração com o Borion');
+    await publishBridgeConfirmed();
     progress('Abrindo aplicativo');
     await completeLogin('google',String(result.user?.email||''));
-    /* A tela já está liberada. Drive, mídias e bridge seguem pela fila serializada
-       em segundo plano; qualquer falha fica pendente e tenta novamente em 5 s. */
-    queueBackgroundSave({reason:'login-confirmado',backup:false,media:true}).catch(error=>{
-      console.warn('[LOGIN_BACKGROUND_SYNC]',error);
-      setSaveStatus('Aplicativo aberto · sincronização da nuvem pendente','warn');
-    });
+    setSaveStatus('Google Drive + Borion_Integracoes confirmados','ok');
     return result.user;
   })().catch(error=>{window.MarcoBorionInterop?.setNotReady?.(error.message||'Falha na sincronização inicial.');throw error;}).finally(()=>{
     if(button?.isConnected){button.disabled=false;button.classList.remove('is-loading');button.innerHTML=original;}
@@ -629,11 +660,8 @@ async function submitLogin(form){
   return await LOGIN_GOOGLE_INFLIGHT;
 }
 
-async function submitOfflineLogin(form){
-  await validateLoginPin(form,{offline:true});
-  window.MarcoBorionInterop?.setNotReady?.('Modo sem Google: publicação da integração bloqueada.');
-  window.MarcoBorionInterop?.pause?.('offline-mode');
-  await completeLogin('pin','');
+async function submitOfflineLogin(){
+  throw new Error('O modo offline foi removido. Entre com o Google e mantenha conexão com a internet.');
 }
 async function lockApp(){
   if(LOCKED)return;
@@ -666,16 +694,15 @@ function renderLogin(entry=''){
         <div class="profile-option" aria-label="Perfil ${attr(p.name||'Marco')}"><div class="avatar">${esc((p.name||'M')[0])}</div><div class="spacer"><strong>${esc(p.name)}</strong><small>${esc(p.role||'Administrador')}</small></div><span class="profile-lock">${icon('lock')}</span></div>
         ${hasPin?`<label class="field login-pin-field"><span>PIN de acesso</span><input id="login-pin" name="pin" type="password" inputmode="numeric" autocomplete="current-password" maxlength="12" pattern="[0-9]*" placeholder="Digite seu PIN" required></label>`:''}
         <button class="btn primary login-enter" type="submit"><span class="google-entry-mark" aria-hidden="true">G</span> Entrar com Google</button>
-        ${hasPin?`<button class="btn secondary" type="button" data-action="login-offline">Entrar com PIN neste dispositivo</button>`:''}
-        <p class="login-security-note">${hasPin?'Use seu PIN local ou valide o acesso com o Google.':'Entre com o Google. Depois, você pode criar um PIN local em Configurações.'}</p>
+        <p class="login-security-note">Internet e Google Drive são obrigatórios. Os dados não são salvos neste dispositivo.</p>
       </form>
       <div class="lock-feature-row">
         <div class="lock-feature"><div class="lock-feature-icon">${icon('settings')}</div><div><strong>Suporte técnico</strong><small>Ordens de serviço, diagnósticos, laudos e atendimento especializado.</small></div></div>
-        <div class="lock-feature"><div class="lock-feature-icon">${icon('lock')}</div><div><strong>Segurança e confiabilidade</strong><small>Acesso protegido por Google e PIN local, sem entrada direta ou senha em texto aberto.</small></div></div>
+        <div class="lock-feature"><div class="lock-feature-icon">${icon('lock')}</div><div><strong>Segurança e confiabilidade</strong><small>Acesso obrigatório pelo Google Drive, sem base de dados local no dispositivo.</small></div></div>
         <div class="lock-feature"><div class="lock-feature-icon">${icon('cloud')}</div><div><strong>Soluções em nuvem</strong><small>Fotos, PDFs, anexos e dados organizados no Google Drive.</small></div></div>
       </div>
     </section>
-    <footer class="lock-footer"><div class="lock-footer-cards"><div class="lock-footer-card"><strong><span class="status-dot-live"></span> Sistema operacional</strong><small>Interface pronta para uso.</small></div><div class="lock-footer-card"><strong>${icon('cloud')} Google Drive e backups</strong><small>Dados e arquivos em pastas separadas.</small></div><div class="lock-footer-card"><strong>${icon('download')} Aplicativo PWA</strong><small>Instalação no computador e celular.</small></div></div><div class="lock-footer-meta"><strong>Marco Iris Tecnologia © 2026</strong><span>v2.4.4</span></div></footer>
+    <footer class="lock-footer"><div class="lock-footer-cards"><div class="lock-footer-card"><strong><span class="status-dot-live"></span> Sistema operacional</strong><small>Interface pronta para uso.</small></div><div class="lock-footer-card"><strong>${icon('cloud')} Google Drive e backups</strong><small>Dados e arquivos em pastas separadas.</small></div><div class="lock-footer-card"><strong>${icon('download')} Aplicativo PWA</strong><small>Instalação no computador e celular.</small></div></div><div class="lock-footer-meta"><strong>Marco Iris Tecnologia © 2026</strong><span>v2.5.0</span></div></footer>
   </main>`;
   startLockNetwork();
 }
@@ -683,7 +710,7 @@ function renderShell(entry=''){
   stopLockNetwork();
   document.body.classList.remove('login-page');
   const p=activeProfile();
-  $('#root').innerHTML=`<div class="app-bg ${entry==='right'?'screen-enter-right':''}"><div class="app-shell"><aside class="sidebar" aria-label="Menu principal"><div class="brand"><img src="icon-192.png" alt=""><div><strong>Marco Iris</strong><small>Soluções em Tecnologia</small></div></div><div class="nav-section">Gestão</div>${NAV.map(([id,label])=>`<button class="nav-btn ${CURRENT_VIEW===id?'active':''}" data-action="navigate" data-view="${id}">${icon(id)}<span>${label}</span></button>`).join('')}<div class="sidebar-footer"><div class="save-status" id="save-status" data-tone="ok">Salvo localmente</div><button class="nav-btn" data-action="manual-save">${icon('save')}<span>Salvar e fazer backup</span></button><button class="nav-btn lock-sidebar-btn" data-action="lock-now">${icon('lock')}<span>Bloquear tela</span></button></div></aside><button class="sidebar-scrim" type="button" data-action="close-menu" aria-label="Fechar menu"></button><main class="main"><header class="topbar"><button class="icon-btn mobile-menu" data-action="toggle-menu" aria-label="Abrir menu">${icon('menu')}</button><div class="view-heading"><h1 id="view-title">${VIEW_TITLES[CURRENT_VIEW]}</h1><small>${esc(p.name)} · ${esc(p.role||'Administrador')}</small></div><label class="global-search">${icon('search')}<input id="global-search" value="${attr(SEARCH)}" placeholder="Pesquisar nesta tela"></label><div class="top-actions"><button class="icon-btn desktop-only" title="Ocultar ou mostrar valores" data-action="toggle-privacy">${icon('eye')}</button><button class="icon-btn" title="Salvar" data-action="manual-save">${icon('save')}</button><button class="icon-btn lock-top-btn" title="Bloquear tela" data-action="lock-now">${icon('lock')}</button></div></header><section class="content" id="view-root"></section></main></div></div>`;
+  $('#root').innerHTML=`<div class="app-bg ${entry==='right'?'screen-enter-right':''}"><div class="app-shell"><aside class="sidebar" aria-label="Menu principal"><div class="brand"><img src="icon-192.png" alt=""><div><strong>Marco Iris</strong><small>Soluções em Tecnologia</small></div></div><div class="nav-section">Gestão</div>${NAV.map(([id,label])=>`<button class="nav-btn ${CURRENT_VIEW===id?'active':''}" data-action="navigate" data-view="${id}">${icon(id)}<span>${label}</span></button>`).join('')}<div class="sidebar-footer"><div class="save-status" id="save-status" data-tone="ok">Google Drive conectado</div><button class="nav-btn" data-action="manual-save">${icon('save')}<span>Backup no Google Drive</span></button><button class="nav-btn lock-sidebar-btn" data-action="lock-now">${icon('lock')}<span>Bloquear tela</span></button></div></aside><button class="sidebar-scrim" type="button" data-action="close-menu" aria-label="Fechar menu"></button><main class="main"><header class="topbar"><button class="icon-btn mobile-menu" data-action="toggle-menu" aria-label="Abrir menu">${icon('menu')}</button><div class="view-heading"><h1 id="view-title">${VIEW_TITLES[CURRENT_VIEW]}</h1><small>${esc(p.name)} · ${esc(p.role||'Administrador')}</small></div><label class="global-search">${icon('search')}<input id="global-search" value="${attr(SEARCH)}" placeholder="Pesquisar nesta tela"></label><div class="top-actions"><button class="icon-btn desktop-only" title="Ocultar ou mostrar valores" data-action="toggle-privacy">${icon('eye')}</button><button class="icon-btn" title="Salvar" data-action="manual-save">${icon('save')}</button><button class="icon-btn lock-top-btn" title="Bloquear tela" data-action="lock-now">${icon('lock')}</button></div></header><section class="content" id="view-root"></section></main></div></div>`;
   renderView('none');
 }
 function renderView(entry='soft'){
@@ -779,7 +806,7 @@ function renderDocuments(){
 }
 function renderSettings(){
   const c=company(),drive=GoogleDriveMarco.cachedUser(),diag=integrityReport();
-  return `<div class="grid two"><section class="card"><div class="card-header"><div><h2>Dados da empresa</h2><p>Usados nas ordens, termos e PDFs.</p></div><button class="btn secondary compact" data-action="edit-company">${icon('edit')} Editar</button></div><div class="definition-list"><dt>Nome</dt><dd><strong>${esc(c.name||'Marco Iris Soluções em Tecnologia')}</strong></dd><dt>Telefone</dt><dd>${esc(c.phone||'—')}</dd><dt>E-mail</dt><dd>${esc(c.email||'—')}</dd><dt>Instagram</dt><dd>${esc(c.instagram||'—')}</dd><dt>Endereço</dt><dd>${esc([c.address,c.number,c.neighborhood,c.city].filter(Boolean).join(', ')||'—')}</dd></div></section><section class="card"><div class="card-header"><div><h2>Diagnóstico do sistema</h2><p>Verifica vínculos, totais, estoque e IDs.</p></div>${diag.total?statusBadge(`${diag.total} alerta(s)`):statusBadge('Tudo íntegro')}</div>${diag.issues.length?`<div class="diagnostic-list">${diag.issues.map(i=>`<div class="diagnostic-row ${i.type}"><div>${icon(i.type==='danger'?'warning':'link')}</div><div><strong>${i.count} · ${esc(i.label)}</strong><small>${esc(i.detail)}</small></div></div>`).join('')}</div>`:'<div class="empty compact-empty">Nenhuma inconsistência estrutural encontrada.</div>'}<div class="toolbar" style="margin:16px 0 0"><div class="toolbar-left"><button class="btn primary" data-action="repair-links">${icon('check')} Corrigir vínculos seguros</button></div></div></section><section class="card"><div class="card-header"><div><h2>Google Drive</h2><p>Dados, fotos, PDFs e anexos organizados automaticamente.</p></div>${drive?statusBadge('Conectado'):statusBadge('Pronto para conectar')}</div><div class="cloud-folders">${[['data','Dados'],['backups','Backups'],['photos','Fotos_OSV'],['pdfs','Ordens de Serviço'],['attachments','Anexos']].map(([k,n])=>`<div class="cloud-folder">${icon('folder')}<strong>${n}</strong><small>${GoogleDriveMarco.cachedStructure()?.[k]?'Pronta':'Será criada'}</small></div>`).join('')}</div><div class="toolbar" style="margin:16px 0 0"><div class="toolbar-left">${drive?`<button class="btn secondary" data-action="sync-google">${icon('cloud')} Sincronizar</button><button class="btn secondary" data-action="load-google">${icon('download')} Carregar</button><button class="btn danger" data-action="disconnect-google">Desconectar</button>`:`<button class="btn primary" data-action="connect-google">${icon('cloud')} Conectar com Google</button>`}</div></div>${drive?`<p class="small muted">Conta: ${esc(drive.email)}</p>`:'<p class="small muted">Clique em conectar, escolha a conta Google do Marco e selecione a pasta principal do sistema.</p>'}</section><section class="card"><div class="card-header"><div><h2>Migração do AppSheet</h2><p>Importe primeiro o JSON privado e depois a pasta com fotos e PDFs.</p></div></div><div class="list"><button class="list-row" data-action="import-json"><div class="kpi-icon blue">${icon('upload')}</div><div class="list-row-main"><strong>Importar dados privados</strong><small>Clientes, OSVs, itens, pagamentos, produtos, serviços e estoque.</small></div>${icon('arrow')}</button><button class="list-row" data-action="import-media"><div class="kpi-icon orange">${icon('camera')}</div><div class="list-row-main"><strong>Importar fotos, PDFs e anexos</strong><small>Os arquivos serão vinculados pelo número da OSV.</small></div>${icon('arrow')}</button></div></section><section class="card"><div class="card-header"><div><h2>Backups e pasta local</h2><p>Proteção adicional no navegador e no computador.</p></div></div><div class="toolbar"><div class="toolbar-left"><button class="btn primary" data-action="manual-save">${icon('save')} Salvar tudo</button><button class="btn secondary" data-action="export-json">${icon('download')} Exportar JSON</button><button class="btn secondary" data-action="local-backups">Backups locais</button><button class="btn secondary" data-action="connect-folder">${icon('folder')} Conectar pasta</button></div></div></section><section class="card"><div class="card-header"><div><h2>Proteção de acesso</h2><p>Trava a interface deste dispositivo com um PIN.</p></div>${activeProfile().pin?statusBadge('PIN ativo'):statusBadge('Sem PIN')}</div><div class="toolbar"><div class="toolbar-left"><button class="btn secondary" data-action="set-pin">${icon('lock')} ${activeProfile().pin?'Alterar PIN':'Definir PIN'}</button>${activeProfile().pin?`<button class="btn secondary" data-action="lock-now">Bloquear agora</button><button class="btn danger" data-action="remove-pin">Remover PIN</button>`:''}</div></div></section><section class="card"><div class="card-header"><div><h2>Preferências</h2><p>Comportamento deste perfil.</p></div></div><label class="list-row"><div class="list-row-main"><strong>Ocultar valores no painel</strong><small>Mostra •••• no lugar de valores e contagens.</small></div><input type="checkbox" data-setting="dashboardPrivacy" ${data().settings.dashboardPrivacy?'checked':''}></label><label class="list-row"><div class="list-row-main"><strong>Impedir estoque negativo</strong><small>Bloqueia saídas manuais acima do saldo disponível.</small></div><input type="checkbox" data-setting="preventNegativeStock" ${data().settings.preventNegativeStock?'checked':''}></label><label class="list-row"><div class="list-row-main"><strong>Salvar automaticamente no Google Drive</strong><small>Envia o JSON após alterações quando conectado.</small></div><input type="checkbox" data-setting="autosaveGoogle" ${data().settings.autosaveGoogle?'checked':''}></label><label class="list-row"><div class="list-row-main"><strong>Salvar automaticamente na pasta local</strong><small>Usa a pasta conectada no Chrome ou Edge.</small></div><input type="checkbox" data-setting="autosaveFolder" ${data().settings.autosaveFolder?'checked':''}></label></section><section class="card"><div class="card-header"><div><h2>Histórico de ações</h2><p>Últimas alterações registradas.</p></div></div><div class="audit-list">${data().audit.slice(0,60).map(a=>`<div class="audit-row"><time>${formatDateTime(a.date)}</time><div><strong>${esc(a.action)}</strong><small>${esc(a.detail||'')}</small></div></div>`).join('')||'<div class="empty">Sem histórico.</div>'}</div></section></div>`;
+  return `<div class="grid two"><section class="card"><div class="card-header"><div><h2>Dados da empresa</h2><p>Usados nas ordens, termos e PDFs.</p></div><button class="btn secondary compact" data-action="edit-company">${icon('edit')} Editar</button></div><div class="definition-list"><dt>Nome</dt><dd><strong>${esc(c.name||'Marco Iris Soluções em Tecnologia')}</strong></dd><dt>Telefone</dt><dd>${esc(c.phone||'—')}</dd><dt>E-mail</dt><dd>${esc(c.email||'—')}</dd><dt>Instagram</dt><dd>${esc(c.instagram||'—')}</dd><dt>Endereço</dt><dd>${esc([c.address,c.number,c.neighborhood,c.city].filter(Boolean).join(', ')||'—')}</dd></div></section><section class="card"><div class="card-header"><div><h2>Diagnóstico do sistema</h2><p>Verifica vínculos, totais, estoque e IDs.</p></div>${diag.total?statusBadge(`${diag.total} alerta(s)`):statusBadge('Tudo íntegro')}</div>${diag.issues.length?`<div class="diagnostic-list">${diag.issues.map(i=>`<div class="diagnostic-row ${i.type}"><div>${icon(i.type==='danger'?'warning':'link')}</div><div><strong>${i.count} · ${esc(i.label)}</strong><small>${esc(i.detail)}</small></div></div>`).join('')}</div>`:'<div class="empty compact-empty">Nenhuma inconsistência estrutural encontrada.</div>'}<div class="toolbar" style="margin:16px 0 0"><div class="toolbar-left"><button class="btn primary" data-action="repair-links">${icon('check')} Corrigir vínculos seguros</button></div></div></section><section class="card"><div class="card-header"><div><h2>Google Drive</h2><p>Dados, fotos, PDFs e anexos organizados automaticamente.</p></div>${drive?statusBadge('Conectado'):statusBadge('Pronto para conectar')}</div><div class="cloud-folders">${[['data','Dados'],['backups','Backups'],['photos','Fotos_OSV'],['pdfs','Ordens de Serviço'],['attachments','Anexos']].map(([k,n])=>`<div class="cloud-folder">${icon('folder')}<strong>${n}</strong><small>${GoogleDriveMarco.cachedStructure()?.[k]?'Pronta':'Será criada'}</small></div>`).join('')}</div><div class="toolbar" style="margin:16px 0 0"><div class="toolbar-left">${drive?`<button class="btn secondary" data-action="sync-google">${icon('cloud')} Sincronizar</button><button class="btn secondary" data-action="load-google">${icon('download')} Carregar</button><button class="btn danger" data-action="disconnect-google">Desconectar</button>`:`<button class="btn primary" data-action="connect-google">${icon('cloud')} Conectar com Google</button>`}</div></div>${drive?`<p class="small muted">Conta: ${esc(drive.email)}</p>`:'<p class="small muted">Clique em conectar, escolha a conta Google do Marco e selecione a pasta principal do sistema.</p>'}</section><section class="card"><div class="card-header"><div><h2>Migração do AppSheet</h2><p>Importe primeiro o JSON privado e depois a pasta com fotos e PDFs.</p></div></div><div class="list"><button class="list-row" data-action="import-json"><div class="kpi-icon blue">${icon('upload')}</div><div class="list-row-main"><strong>Importar dados privados</strong><small>Clientes, OSVs, itens, pagamentos, produtos, serviços e estoque.</small></div>${icon('arrow')}</button><button class="list-row" data-action="import-media"><div class="kpi-icon orange">${icon('camera')}</div><div class="list-row-main"><strong>Importar fotos, PDFs e anexos</strong><small>Os arquivos serão vinculados pelo número da OSV.</small></div>${icon('arrow')}</button></div></section><section class="card"><div class="card-header"><div><h2>Base oficial na nuvem</h2><p>Clientes, OSVs, lançamentos, fotos e exclusões dependem 100% do Google Drive.</p></div>${statusBadge('Drive obrigatório')}</div><div class="toolbar"><div class="toolbar-left"><button class="btn primary" data-action="manual-save">${icon('save')} Criar backup no Drive</button><button class="btn secondary" data-action="export-json">${icon('download')} Exportar cópia JSON</button></div></div><p class="small muted">Não existe base local nem modo offline. Sem internet o aplicativo é bloqueado.</p></section><section class="card"><div class="card-header"><div><h2>Proteção de acesso</h2><p>Trava a interface deste dispositivo com um PIN.</p></div>${activeProfile().pin?statusBadge('PIN ativo'):statusBadge('Sem PIN')}</div><div class="toolbar"><div class="toolbar-left"><button class="btn secondary" data-action="set-pin">${icon('lock')} ${activeProfile().pin?'Alterar PIN':'Definir PIN'}</button>${activeProfile().pin?`<button class="btn secondary" data-action="lock-now">Bloquear agora</button><button class="btn danger" data-action="remove-pin">Remover PIN</button>`:''}</div></div></section><section class="card"><div class="card-header"><div><h2>Preferências</h2><p>Comportamento deste perfil.</p></div></div><label class="list-row"><div class="list-row-main"><strong>Ocultar valores no painel</strong><small>Mostra •••• no lugar de valores e contagens.</small></div><input type="checkbox" data-setting="dashboardPrivacy" ${data().settings.dashboardPrivacy?'checked':''}></label><label class="list-row"><div class="list-row-main"><strong>Impedir estoque negativo</strong><small>Bloqueia saídas manuais acima do saldo disponível.</small></div><input type="checkbox" data-setting="preventNegativeStock" ${data().settings.preventNegativeStock?'checked':''}></label><div class="list-row"><div class="list-row-main"><strong>Google Drive obrigatório</strong><small>Toda alteração é confirmada na nuvem antes de permanecer no sistema.</small></div>${statusBadge('Sempre ativo')}</div><div class="list-row"><div class="list-row-main"><strong>Armazenamento local</strong><small>Desativado para impedir conflitos, dados antigos e registros ressuscitando.</small></div>${statusBadge('Desativado')}</div></section><section class="card"><div class="card-header"><div><h2>Histórico de ações</h2><p>Últimas alterações registradas.</p></div></div><div class="audit-list">${data().audit.slice(0,60).map(a=>`<div class="audit-row"><time>${formatDateTime(a.date)}</time><div><strong>${esc(a.action)}</strong><small>${esc(a.detail||'')}</small></div></div>`).join('')||'<div class="empty">Sem histórico.</div>'}</div></section></div>`;
 }
 function openModal(title,content,wide=false){
   const root=$('#modal-root');
@@ -852,7 +879,7 @@ async function saveConsentForm(form){const id=form.dataset.id||nextCode('TER',da
 
 function openCompanyForm(){const c=company();openModal('Dados da empresa',`<form data-form="company"><div class="form-grid three">${field('Nome da empresa','name',c.name||'')}${field('CPF / CNPJ','document',c.document||'')}${field('Telefone','phone',c.phone||'')}${field('E-mail','email',c.email||'','email')}${field('Instagram','instagram',c.instagram||'')}${field('Endereço','address',c.address||'')}${field('Número','number',c.number||'')}${field('Bairro','neighborhood',c.neighborhood||'')}${field('Cidade / UF','city',c.city||'')}${field('CEP','zip',c.zip||'')}${textarea('Mensagem padrão do PDF','defaultNote',c.defaultNote||'',true)}</div><div class="form-actions"><button type="button" class="btn secondary" data-action="close-modal">Cancelar</button><button class="btn primary">Salvar empresa</button></div></form>`,true);}
 function openPinForm(){openModal(activeProfile().pin?'Alterar PIN':'Definir PIN',`<form data-form="pin" class="pin-form"><div class="pin-modal-hero"><div class="pin-modal-chip">${icon('lock')}</div><div><strong>${activeProfile().pin?'Atualize a proteção local':'Ative a proteção local'}</strong><small>Use um PIN de 4 a 8 números. Ele será solicitado ao abrir ou bloquear o sistema neste dispositivo.</small></div></div><div class="notice pin-notice"><strong>Dica de segurança:</strong><br>Evite sequências simples como 1234, 0000 ou datas fáceis de adivinhar.</div><div class="form-grid pin-form-grid">${field('Novo PIN','pin','','password','inputmode="numeric" minlength="4" maxlength="8" pattern="[0-9]{4,8}" required placeholder="Digite de 4 a 8 números"')}${field('Confirmar PIN','confirmPin','','password','inputmode="numeric" minlength="4" maxlength="8" pattern="[0-9]{4,8}" required placeholder="Repita o PIN"')}</div><div class="form-actions"><button type="button" class="btn secondary" data-action="close-modal">Cancelar</button><button class="btn primary">Salvar PIN</button></div></form>`);}
-async function openLocalBackups(){const list=await MarcoStorage.listBackups();const reasonLabel=r=>r==='auto'?'Automático (a cada 1 min)':r;openModal('Backups locais',list.length?`<div class="list">${list.map(b=>`<div class="list-row"><div class="list-row-main"><strong>${formatDateTime(b.createdAt)}</strong><small>${esc(reasonLabel(b.reason))}</small></div><button class="btn secondary compact" data-action="restore-backup" data-id="${attr(b.id)}">Restaurar</button></div>`).join('')}</div>`:'<div class="empty">Nenhum backup local criado.</div>');}
+async function openLocalBackups(){openModal('Backups no Google Drive','<div class="empty">O modo nuvem obrigatória não cria backups locais. Use <strong>Criar backup no Drive</strong>.</div>');}
 
 function updateOrderFormTotal(){const form=$('form[data-form="order"]');if(!form)return;let total=0;$$('.item-editor-row',form).forEach(row=>{const q=num($('[data-item-field="qty"]',row)?.value),p=num($('[data-item-field="price"]',row)?.value),sub=q*p;const el=$('[data-item-field="subtotal"]',row);if(el)el.value=sub.toFixed(2);total+=sub;});total=Math.max(0,total-num(form.elements.discount?.value));const out=$('#order-form-total');if(out)out.textContent=currency(total);}
 function updateItemReference(row){const type=$('[data-item-field="type"]',row).value,ref=$('[data-item-field="ref"]',row);ref.innerHTML=itemReferenceOptions(type);const stock=$('[data-item-field="stock"]',row);if(type==='Serviço'){stock.checked=false;stock.disabled=true;}else stock.disabled=false;updateItemPrice(row);}
@@ -889,62 +916,87 @@ function canonicalOrderMediaName(orderId,fileName){
   return `${orderId}_${clean}`;
 }
 async function addAttachmentsToOrder(order,files){
-  let count=0;
-  for(const file of files){
-    const fileName=canonicalOrderMediaName(order.id,file.name),blob=await materializeBlob(file),record=await MarcoStorage.putMedia(blob,{name:fileName,type:blob.type||file.type});
-    const meta={id:`attachment_${Date.now()}_${Math.random().toString(36).slice(2,7)}`,orderId:order.id,kind:'attachment',fileName,localKey:record.id,driveFileId:'',webViewLink:'',createdAt:nowIso()};
-    order.attachments=order.attachments||[];order.attachments.push(meta);
-    if(GoogleDriveMarco.isConfigured()){try{const remote=await GoogleDriveMarco.uploadBlob(blob,'attachments',fileName);Object.assign(meta,{driveFileId:remote.id,webViewLink:remote.webViewLink||''});}catch(e){console.warn(e);toast(`Anexo salvo localmente; envio ao Drive pendente: ${e.message}`,'warn');}}
-    count++;
+  if(!navigator.onLine||!GoogleDriveMarco.isConfigured())throw new Error('Internet e Google Drive são obrigatórios para adicionar anexos.');
+  const created=[];
+  try{
+    for(const file of files){
+      const fileName=canonicalOrderMediaName(order.id,file.name),blob=await materializeBlob(file),record=await MarcoStorage.putMedia(blob,{name:fileName,type:blob.type||file.type});
+      const remote=await GoogleDriveMarco.uploadBlob(blob,'attachments',fileName);
+      const meta={id:`attachment_${Date.now()}_${Math.random().toString(36).slice(2,7)}`,orderId:order.id,kind:'attachment',fileName,localKey:record.id,driveFileId:remote.id,webViewLink:remote.webViewLink||'',createdAt:nowIso()};
+      order.attachments=order.attachments||[];order.attachments.push(meta);created.push(meta);
+    }
+    if(created.length)await persist('Anexos adicionados',`${created.length} arquivo(s) na ${order.id}`);
+    return created.length;
+  }catch(error){
+    order.attachments=(order.attachments||[]).filter(item=>!created.some(meta=>meta.id===item.id));
+    for(const meta of created){if(meta.localKey)await MarcoStorage.deleteMedia(meta.localKey).catch(()=>{});if(meta.driveFileId)await GoogleDriveMarco.trash(meta.driveFileId).catch(()=>{});}
+    throw error;
   }
-  if(count)await persist('Anexos adicionados',`${count} arquivo(s) na ${order.id}`);return count;
 }
 async function addPhotosToOrder(order,files){
-  let count=0;
-  for(const file of files){
-    if(!file.type.startsWith('image/'))continue;
-    const fileName=canonicalOrderMediaName(order.id,file.name),optimized=await optimizeImage(file),blob=await materializeBlob(optimized),record=await MarcoStorage.putMedia(blob,{name:fileName,type:blob.type});
-    const meta={id:`photo_${Date.now()}_${Math.random().toString(36).slice(2,7)}`,orderId:order.id,kind:'photo',fileName,localKey:record.id,driveFileId:'',webViewLink:'',createdAt:nowIso()};
-    order.photos=order.photos||[];order.photos.push(meta);
-    if(GoogleDriveMarco.isConfigured()){try{const remote=await GoogleDriveMarco.uploadBlob(blob,'photos',fileName);Object.assign(meta,{driveFileId:remote.id,webViewLink:remote.webViewLink||''});}catch(e){console.warn(e);toast(`Foto salva localmente; envio ao Drive pendente: ${e.message}`,'warn');}}
-    count++;
+  if(!navigator.onLine||!GoogleDriveMarco.isConfigured())throw new Error('Internet e Google Drive são obrigatórios para adicionar fotos.');
+  const created=[];
+  try{
+    for(const file of files){
+      if(!file.type.startsWith('image/'))continue;
+      const fileName=canonicalOrderMediaName(order.id,file.name),optimized=await optimizeImage(file),blob=await materializeBlob(optimized),record=await MarcoStorage.putMedia(blob,{name:fileName,type:blob.type});
+      const remote=await GoogleDriveMarco.uploadBlob(blob,'photos',fileName);
+      const meta={id:`photo_${Date.now()}_${Math.random().toString(36).slice(2,7)}`,orderId:order.id,kind:'photo',fileName,localKey:record.id,driveFileId:remote.id,webViewLink:remote.webViewLink||'',createdAt:nowIso()};
+      order.photos=order.photos||[];order.photos.push(meta);created.push(meta);
+    }
+    if(created.length)await persist('Fotos adicionadas',`${created.length} foto(s) na ${order.id}`);
+    return created.length;
+  }catch(error){
+    order.photos=(order.photos||[]).filter(item=>!created.some(meta=>meta.id===item.id));
+    for(const meta of created){if(meta.localKey)await MarcoStorage.deleteMedia(meta.localKey).catch(()=>{});if(meta.driveFileId)await GoogleDriveMarco.trash(meta.driveFileId).catch(()=>{});}
+    throw error;
   }
-  if(count)await persist('Fotos adicionadas',`${count} foto(s) na ${order.id}`);return count;
 }
 function findMedia(mediaId){for(const o of data().serviceOrders){for(const m of [...(o.photos||[]),...(o.pdfs||[]),...(o.attachments||[])])if(m.id===mediaId)return {meta:m,order:o};}const m=data().attachments.find(x=>x.id===mediaId);return m?{meta:m,order:null}:null;}
-async function getMediaBlob(meta){if(!meta)return null;if(meta.localKey){const rec=await MarcoStorage.getMedia(meta.localKey);if(rec?.blob)return rec.blob;}if(meta.driveFileId&&GoogleDriveMarco.isConfigured()){const blob=await GoogleDriveMarco.downloadBlob(meta.driveFileId);const rec=await MarcoStorage.putMedia(blob,{name:meta.fileName,type:blob.type});meta.localKey=rec.id;await MarcoStorage.save(STATE);return blob;}return null;}
+async function getMediaBlob(meta){if(!meta)return null;if(meta.localKey){const rec=await MarcoStorage.getMedia(meta.localKey);if(rec?.blob)return rec.blob;}if(meta.driveFileId&&GoogleDriveMarco.isConfigured()){const blob=await GoogleDriveMarco.downloadBlob(meta.driveFileId);const rec=await MarcoStorage.putMedia(blob,{name:meta.fileName,type:blob.type});meta.localKey=rec.id;return blob;}return null;}
 async function hydrateMediaImages(){for(const img of $$('img[data-media-id]')){const found=findMedia(img.dataset.mediaId);if(!found)continue;try{const blob=await getMediaBlob(found.meta);if(blob){const url=URL.createObjectURL(blob);img.src=url;img.onload=()=>setTimeout(()=>URL.revokeObjectURL(url),1000);}else{img.removeAttribute('src');img.alt='Importe a mídia privada para visualizar esta foto.';}}catch(e){console.warn(e);}}}
 async function importExistingMedia(files){
-  const selected=[...files];if(!selected.length)return;let linked=0,skipped=0,uploaded=0;setSaveStatus(`Importando 0 de ${selected.length}…`,'warn');
-  for(let i=0;i<selected.length;i++){
-    const file=selected[i],orderCode=window.MarcoIdentifiers?.extractEntityCode(file.name,'OSV')||'';if(!orderCode){skipped++;continue;}
-    const order=findOrder(orderCode);if(!order){skipped++;continue;}
-    const isPdf=file.type==='application/pdf'||/\.pdf$/i.test(file.name),isImage=file.type.startsWith('image/')||/\.(jpg|jpeg|png|webp)$/i.test(file.name),kind=isPdf?'pdf':isImage?'photo':'attachment';
-    const fileName=canonicalOrderMediaName(order.id,file.name),source=isImage?await optimizeImage(file):file,blob=await materializeBlob(source),record=await MarcoStorage.putMedia(blob,{name:fileName,type:blob.type||file.type});
-    const target=isPdf?(order.pdfs=order.pdfs||[]):isImage?(order.photos=order.photos||[]):(order.attachments=order.attachments||[]);let meta=target.find(m=>m.fileName===fileName);
-    if(!meta){meta={id:`${kind}_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,orderId:order.id,kind,fileName,localKey:'',driveFileId:'',webViewLink:'',createdAt:nowIso(),legacy:isPdf};target.push(meta);}
-    meta.localKey=record.id;
-    if(GoogleDriveMarco.isConfigured()){try{const folder=isPdf?'pdfs':isImage?'photos':'attachments',remote=await GoogleDriveMarco.uploadBlob(blob,folder,fileName,meta.driveFileId);meta.driveFileId=remote.id;meta.webViewLink=remote.webViewLink||'';uploaded++;}catch(e){console.warn(e);}}
-    linked++;setSaveStatus(`Importando ${i+1} de ${selected.length}…`,'warn');
+  if(!navigator.onLine||!GoogleDriveMarco.isConfigured())throw new Error('Internet e Google Drive são obrigatórios para importar mídias.');
+  const selected=[...files];if(!selected.length)return;
+  let linked=0,skipped=0,uploaded=0;const created=[];
+  setSaveStatus(`Importando 0 de ${selected.length}…`,'warn');
+  try{
+    for(let i=0;i<selected.length;i++){
+      const file=selected[i],orderCode=window.MarcoIdentifiers?.extractEntityCode(file.name,'OSV')||'';if(!orderCode){skipped++;continue;}
+      const order=findOrder(orderCode);if(!order){skipped++;continue;}
+      const isPdf=file.type==='application/pdf'||/\.pdf$/i.test(file.name),isImage=file.type.startsWith('image/')||/\.(jpg|jpeg|png|webp)$/i.test(file.name),kind=isPdf?'pdf':isImage?'photo':'attachment';
+      const fileName=canonicalOrderMediaName(order.id,file.name),source=isImage?await optimizeImage(file):file,blob=await materializeBlob(source),record=await MarcoStorage.putMedia(blob,{name:fileName,type:blob.type||file.type});
+      const folder=isPdf?'pdfs':isImage?'photos':'attachments',remote=await GoogleDriveMarco.uploadBlob(blob,folder,fileName);
+      const target=isPdf?(order.pdfs=order.pdfs||[]):isImage?(order.photos=order.photos||[]):(order.attachments=order.attachments||[]);
+      let meta=target.find(m=>m.fileName===fileName);
+      if(!meta){meta={id:`${kind}_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,orderId:order.id,kind,fileName,localKey:record.id,driveFileId:remote.id,webViewLink:remote.webViewLink||'',createdAt:nowIso(),legacy:isPdf};target.push(meta);created.push({target,meta});}
+      else Object.assign(meta,{localKey:record.id,driveFileId:remote.id,webViewLink:remote.webViewLink||''});
+      uploaded++;linked++;setSaveStatus(`Importando ${i+1} de ${selected.length}…`,'warn');
+    }
+    await persist('Mídias do AppSheet importadas',`${linked} vinculadas, ${uploaded} enviadas ao Drive, ${skipped} ignoradas`);
+    setSaveStatus('Importação confirmada no Google Drive','ok');renderView();toast(`${linked} arquivos vinculados às ordens.${skipped?` ${skipped} ignorados.`:''}`,skipped?'warn':'ok');
+  }catch(error){
+    for(const item of created)item.target.splice(item.target.indexOf(item.meta),1);
+    throw error;
   }
-  await persist('Mídias do AppSheet importadas',`${linked} vinculadas, ${uploaded} enviadas ao Drive, ${skipped} ignoradas`);setSaveStatus('Importação concluída','ok');renderView();toast(`${linked} arquivos vinculados às ordens.${uploaded?` ${uploaded} enviados ao Drive.`:''}${skipped?` ${skipped} ignorados.`:''}`,skipped?'warn':'ok');
 }
 async function syncPendingMedia(){
   if(!GoogleDriveMarco.isConfigured())return 0;let count=0;
   for(const o of data().serviceOrders){for(const [list,folder] of [[o.photos||[],'photos'],[o.pdfs||[],'pdfs'],[o.attachments||[],'attachments']]){for(const m of list){if(m.localKey&&!m.driveFileId){const b=await getMediaBlob(m);if(b){const fileName=canonicalOrderMediaName(o.id,m.fileName||'arquivo');m.fileName=fileName;const r=await GoogleDriveMarco.uploadBlob(b,folder,fileName);m.driveFileId=r.id;m.webViewLink=r.webViewLink||'';count++;}}}}}
-  if(count)await MarcoStorage.save(STATE);return count;
+  return count;
 }
 async function generatePdfForOrder(orderId,share=false){
   if(share)throw new Error('O fluxo seguro de compartilhamento ainda não foi inicializado. Recarregue a aplicação.');
+  if(!navigator.onLine||!GoogleDriveMarco.isConfigured())throw new Error('Internet e Google Drive são obrigatórios para gerar e registrar o PDF.');
   const o=findOrder(orderId);if(!o)throw new Error('Ordem de serviço não encontrada.');
   const c=findClient(o.clientId)||{name:o.clientName,phone:''};
   setSaveStatus('Gerando PDF…','warn');
   const result=await MarcoPdf.generate(o,{client:c,company:company(),items:orderItems(o.id),payments:orderPayments(o.id),itemName:itemDescription,getPhotoBlob:getMediaBlob});
-  const record=await MarcoStorage.putMedia(result.blob,{name:result.fileName,type:'application/pdf'});
-  const meta={id:`pdf_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,orderId:o.id,kind:'pdf',fileName:result.fileName,localKey:record.id,driveFileId:'',webViewLink:'',createdAt:nowIso()};
+  const record=await MarcoStorage.putMedia(result.blob,{name:result.fileName,type:'application/pdf'}),remote=await GoogleDriveMarco.uploadBlob(result.blob,'pdfs',result.fileName);
+  const meta={id:`pdf_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,orderId:o.id,kind:'pdf',fileName:result.fileName,localKey:record.id,driveFileId:remote.id,webViewLink:remote.webViewLink||'',createdAt:nowIso()};
   o.pdfs=o.pdfs||[];o.pdfs.push(meta);
-  if(GoogleDriveMarco.isConfigured()){try{const remote=await GoogleDriveMarco.uploadBlob(result.blob,'pdfs',result.fileName);meta.driveFileId=remote.id;meta.webViewLink=remote.webViewLink||'';}catch(e){toast(`PDF salvo localmente; envio ao Drive pendente: ${e.message}`,'warn');}}
-  await persist('PDF da OSV gerado',`${o.id} · ${result.fileName}`);setSaveStatus('PDF gerado','ok');MarcoStorage.downloadBlob(result.blob,result.fileName);toast('PDF gerado e baixado.');renderView();return meta;
+  try{await persist('PDF da OSV gerado',`${o.id} · ${result.fileName}`);}catch(error){o.pdfs=o.pdfs.filter(x=>x.id!==meta.id);await GoogleDriveMarco.trash(meta.driveFileId).catch(()=>{});throw error;}
+  setSaveStatus('PDF confirmado no Google Drive','ok');MarcoStorage.downloadBlob(result.blob,result.fileName);toast('PDF gerado, salvo no Drive e baixado.');renderView();return meta;
 }
 
 async function openPdfMedia(orderId,mediaId){const found=findMedia(mediaId);if(!found)throw new Error('Arquivo não encontrado.');const blob=await getMediaBlob(found.meta);if(!blob)throw new Error('Este arquivo está mapeado, mas ainda não foi importado. Use Configurações → Importar fotos, PDFs e anexos.');const url=URL.createObjectURL(blob),win=window.open(url,'_blank');if(!win)MarcoStorage.downloadBlob(blob,found.meta.fileName||`${orderId}.pdf`);setTimeout(()=>URL.revokeObjectURL(url),120000);}
@@ -953,11 +1005,81 @@ function pickPhotosForOrder(orderId,mode='camera'){const input=document.createEl
 function exportFinanceCsv(){const rows=[['Código','OSV','Tipo','Forma de pagamento','Valor','Vencimento','Pagamento','Status','Observação']];data().payments.forEach(p=>rows.push([p.code||p.id,p.orderId,p.type,p.paymentMethod,p.value,p.dueDate,p.paymentDate,window.MarcoFinanceStatus?.effectiveStatus?.(p)||p.status,p.notes]));const csv='\ufeff'+rows.map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(';')).join('\n');MarcoStorage.downloadBlob(new Blob([csv],{type:'text/csv;charset=utf-8'}),`Financeiro_Marco_Iris_${today()}.csv`);}
 
 let manualSaveInflight=null,connectGoogleInflight=null,syncGoogleInflight=null;
-async function manualSave(){if(manualSaveInflight)return await manualSaveInflight;manualSaveInflight=(async()=>{setSaveStatus('Salvando, criando backup e verificando…','warn');await MarcoStorage.save(STATE);await MarcoStorage.createBackup(STATE,'manual');const saved=['navegador'],failed=[];try{const h=await MarcoStorage.getFolderHandle();if(h){await MarcoStorage.saveToFolder(STATE,{handle:h,requestPermission:true,backup:true,reason:'manual'});saved.push('pasta local');}}catch(e){failed.push(`Pasta: ${e.message}`);}if(GoogleDriveMarco.isConfigured()){try{await flushCloudState('manual',{backup:true,retryMedia:true});const diag=await GoogleDriveMarco.diagnose(STATE);if(!diag.ok)throw new Error('A base ou o marco-iris.bridge.json não pôde ser confirmado.');saved.push('Google Drive + Borion_Integracoes');}catch(e){failed.push(`Drive: ${e.message}`);scheduleCloudRetry('manual');}}setSaveStatus(failed.length?'Backup parcial · nuvem pendente':'Backup completo e confirmado',failed.length?'warn':'ok');toast(`Salvo em ${saved.join(', ')}.${failed.length?` ${failed.join(' · ')}`:''}`,failed.length?'warn':'ok');})().finally(()=>{manualSaveInflight=null;});return await manualSaveInflight;}
-async function connectGoogle(){if(connectGoogleInflight)return await connectGoogleInflight;const buttons=$$('[data-action="connect-google"]');buttons.forEach(button=>{button.disabled=true;button.dataset.originalText=button.innerHTML;button.innerHTML=`${icon('cloud')} Conectando…`;});connectGoogleInflight=(async()=>{window.MarcoBorionInterop?.pause?.('connect-google');setSaveStatus('Localizando a base oficial…','warn');const localBefore=clone(STATE);const result=await GoogleDriveMarco.initializeOfficialState(STATE,{interactive:true,onProgress:text=>setSaveStatus(text,'warn')});if(result.source==='drive')await MarcoStorage.createBackup(localBefore,'antes-de-conectar-drive-oficial');STATE=result.state;normalizeState();await MarcoStorage.save(STATE);window.MarcoBorionInterop?.resume?.('connect-google');window.MarcoBorionInterop?.setReady?.(STATE);const sent=await syncPendingMedia();await flushCloudState('primeira-conexao-confirmada',{backup:true,retryMedia:false});const diag=await GoogleDriveMarco.diagnose(STATE);if(!diag.ok)throw new Error('A instalação foi conectada, mas a base principal ou o marco-iris.bridge.json não foi confirmado.');setSaveStatus('Drive, backups e integração confirmados','ok');renderShell();toast(`Conta ${result.user?.email||''} conectada à base oficial${sent?` · ${sent} arquivos enviados`:''}.`);})().catch(e=>{window.MarcoBorionInterop?.setNotReady?.(e.message);throw e;}).finally(()=>{connectGoogleInflight=null;buttons.forEach(button=>{button.disabled=false;if(button.dataset.originalText)button.innerHTML=button.dataset.originalText;});});return await connectGoogleInflight;}
-async function syncGoogle(){if(syncGoogleInflight)return await syncGoogleInflight;syncGoogleInflight=(async()=>{window.MarcoBorionInterop?.pause?.('manual-sync');setSaveStatus('Comparando revisões…','warn');const result=await GoogleDriveMarco.sync(STATE,{interactive:true,backup:true,reason:'sincronizacao'});if(result.direction==='remote'){await MarcoStorage.createBackup(STATE,'antes-de-carregar-google');STATE=result.state;await backupStateBeforeV220Migration(STATE,'google-remoto');normalizeState();await MarcoStorage.save(STATE);CLOUD_PENDING_LOCAL=false;renderShell();toast('A revisão oficial mais recente foi carregada do Google Drive.');}const sent=await syncPendingMedia();window.MarcoBorionInterop?.resume?.('manual-sync');window.MarcoBorionInterop?.setReady?.(STATE);await flushCloudState('sincronizacao-manual-confirmada',{backup:false,retryMedia:false});const diag=await GoogleDriveMarco.diagnose(STATE);if(!diag.ok)throw new Error('A sincronização terminou, mas a base ou a integração não pôde ser confirmada.');setSaveStatus('Google Drive e integração confirmados','ok');renderView();toast(`Sincronização concluída${sent?` · ${sent} mídias enviadas`:''}.`);})().catch(e=>{window.MarcoBorionInterop?.setNotReady?.(e.message);throw e;}).finally(()=>{syncGoogleInflight=null;});return await syncGoogleInflight;}
-async function loadGoogle(){window.MarcoBorionInterop?.pause?.('load-google');try{const remote=await GoogleDriveMarco.load({interactive:true});if(!await confirmAction('Carregar a base oficial do Google Drive substituirá a base deste navegador. Continuar?')){window.MarcoBorionInterop?.resume?.('load-google');return;}await MarcoStorage.createBackup(STATE,'antes-de-carregar-google');STATE=remote.state;await backupStateBeforeV220Migration(STATE,'google-carregar');normalizeState();await MarcoStorage.save(STATE);CLOUD_PENDING_LOCAL=false;window.MarcoBorionInterop?.resume?.('load-google');window.MarcoBorionInterop?.setReady?.(STATE);await flushCloudState('carregamento-drive-confirmado',{backup:false,retryMedia:true});renderShell();toast('Base oficial carregada e integração republicada.');}catch(e){window.MarcoBorionInterop?.setNotReady?.(e.message);throw e;}}
-async function connectFolder(){const h=await MarcoStorage.connectFolder();await MarcoStorage.saveToFolder(STATE,{handle:h,backup:true,reason:'primeira-conexao'});renderView();toast(`Pasta “${h.name}” conectada e backup criado.`);}
+async function manualSave(){
+  if(manualSaveInflight)return await manualSaveInflight;
+  manualSaveInflight=(async()=>{
+    if(!navigator.onLine)throw new Error('Internet obrigatória para salvar.');
+    if(!GoogleDriveMarco.isConfigured())throw new Error('Google Drive desconectado.');
+    setSaveStatus('Criando backup no Google Drive…','warn');
+    const result=await flushCloudState('backup-manual',{backup:true,retryMedia:true});
+    LAST_CONFIRMED_STATE=clone(STATE);
+    await MarcoStorage.saveSyncBase?.(STATE);
+    const diag=await GoogleDriveMarco.diagnose(STATE);
+    if(!diag.ok)throw new Error('A base ou o marco-iris.bridge.json não pôde ser confirmado.');
+    setSaveStatus('Backup no Drive + integração confirmados','ok');
+    toast('Backup criado e confirmado no Google Drive.');
+    return result;
+  })().finally(()=>{manualSaveInflight=null;});
+  return await manualSaveInflight;
+}
+async function connectGoogle(){
+  if(connectGoogleInflight)return await connectGoogleInflight;
+  const buttons=$$('[data-action="connect-google"]');
+  buttons.forEach(button=>{button.disabled=true;button.dataset.originalText=button.innerHTML;button.innerHTML=`${icon('cloud')} Conectando…`;});
+  connectGoogleInflight=(async()=>{
+    if(!navigator.onLine)throw new Error('Internet obrigatória para conectar o Google Drive.');
+    window.MarcoBorionInterop?.pause?.('connect-google');
+    setSaveStatus('Carregando a base oficial do Drive…','warn');
+    const result=await GoogleDriveMarco.initializeOfficialState(clone(window.MARCO_INITIAL_DATA),{interactive:true,onProgress:text=>setSaveStatus(text,'warn')});
+    STATE=result.state;
+    normalizeState();
+    LAST_CONFIRMED_STATE=clone(STATE);
+    await MarcoStorage.saveSyncBase?.(STATE);
+    window.MarcoBorionInterop?.resume?.('connect-google');
+    window.MarcoBorionInterop?.prepareState?.(STATE);
+    window.MarcoBorionInterop?.setReady?.(STATE);
+    await publishBridgeConfirmed();
+    const diag=await GoogleDriveMarco.diagnose(STATE);
+    if(!diag.ok)throw new Error('A base principal ou o marco-iris.bridge.json não foi confirmado.');
+    setSaveStatus('Google Drive + Borion_Integracoes confirmados','ok');
+    renderShell();
+    toast(`Conta ${result.user?.email||''} conectada à base oficial.`);
+  })().catch(e=>{window.MarcoBorionInterop?.setNotReady?.(e.message);throw e;}).finally(()=>{
+    connectGoogleInflight=null;
+    buttons.forEach(button=>{button.disabled=false;if(button.dataset.originalText)button.innerHTML=button.dataset.originalText;});
+  });
+  return await connectGoogleInflight;
+}
+async function syncGoogle(){
+  if(syncGoogleInflight)return await syncGoogleInflight;
+  syncGoogleInflight=(async()=>{
+    if(!navigator.onLine)throw new Error('Internet obrigatória para sincronizar.');
+    if(CLOUD_ONLY_COMMITTING)throw new Error('Aguarde a alteração atual ser confirmada no Google Drive.');
+    window.MarcoBorionInterop?.pause?.('manual-sync');
+    setSaveStatus('Carregando a base oficial do Google Drive…','warn');
+    const remote=await GoogleDriveMarco.load({interactive:true});
+    STATE=remote.state;
+    await backupStateBeforeV220Migration(STATE,'google-remoto');
+    normalizeState();
+    LAST_CONFIRMED_STATE=clone(STATE);
+    await MarcoStorage.saveSyncBase?.(STATE);
+    CLOUD_PENDING_LOCAL=false;
+    window.MarcoBorionInterop?.resume?.('manual-sync');
+    window.MarcoBorionInterop?.prepareState?.(STATE);
+    window.MarcoBorionInterop?.setReady?.(STATE);
+    await publishBridgeConfirmed();
+    setSaveStatus('Google Drive e integração confirmados','ok');
+    renderShell();
+    toast('Base oficial atualizada do Google Drive.');
+  })().catch(e=>{window.MarcoBorionInterop?.setNotReady?.(e.message);throw e;}).finally(()=>{syncGoogleInflight=null;});
+  return await syncGoogleInflight;
+}
+async function loadGoogle(){
+  return await syncGoogle();
+}
+async function connectFolder(){
+  throw new Error('O Marco Iris usa exclusivamente o Google Drive.');
+}
 async function diagnoseDriveInstallation(){
   if(!GoogleDriveMarco.isConfigured())throw new Error('Conecte o Google Drive antes de executar o diagnóstico.');
   setSaveStatus('Testando gravação e leitura da instalação…','warn');
@@ -975,7 +1097,7 @@ async function deleteAppointment(id){const a=data().appointments.find(x=>x.id===
 async function deleteClient(id){const c=findClient(id);if(!c)return;const deps={orders:data().serviceOrders.filter(o=>o.clientId===id).length,appointments:data().appointments.filter(a=>a.clientId===id).length,consents:data().consents.filter(t=>t.clientId===id).length};if(deps.orders||deps.appointments||deps.consents)throw new Error(`Cliente não pode ser excluído: possui ${deps.orders} OSV(s), ${deps.appointments} agendamento(s) e ${deps.consents} termo(s). Arquive o cliente ou remova os vínculos primeiro.`);if(!await confirmAction(`Excluir definitivamente ${c.name}?`))return;await MarcoStorage.createBackup(STATE,'antes-de-excluir-cliente');data().clients=data().clients.filter(x=>x.id!==id);await persist('Cliente excluído',`${id} · ${c.name}`);closeModal();renderView();toast('Cliente excluído.');}
 async function toggleClientStatus(id){const c=findClient(id);if(!c)return;c.status=c.status==='Inativo'?'Ativo':'Inativo';await persist(c.status==='Ativo'?'Cliente restaurado':'Cliente arquivado',`${id} · ${c.name}`);renderView();toast(c.status==='Ativo'?'Cliente restaurado.':'Cliente arquivado.');}
 async function toggleOrderStatus(id){const o=findOrder(id);if(!o)return;o.registrationStatus=o.registrationStatus==='Inativo'?'Ativo':'Inativo';await persist(o.registrationStatus==='Ativo'?'OSV restaurada':'OSV arquivada',id);renderView();toast(o.registrationStatus==='Ativo'?'OSV restaurada.':'OSV arquivada.');}
-async function deleteOrder(id){const o=findOrder(id);if(!o)return;const items=orderItems(id),payments=orderPayments(id),terms=orderConsentItems(id),media=[...(o.photos||[]),...(o.pdfs||[]),...(o.attachments||[])];if(!await confirmAction(`Excluir definitivamente ${id}? Serão removidos ${items.length} item(ns), ${payments.length} lançamento(s), ${terms.length} termo(s) e ${media.length} arquivo(s). O estoque automático será revertido.`))return;if(!await confirmAction('Esta é a confirmação final. Um backup local será criado antes da exclusão. Continuar?'))return;await MarcoStorage.createBackup(STATE,'antes-de-excluir-os');for(const m of media){if(m.localKey)await MarcoStorage.deleteMedia(m.localKey);if(m.driveFileId&&GoogleDriveMarco.isConfigured()){try{await GoogleDriveMarco.trash(m.driveFileId);}catch(e){console.warn(e);}}}const itemIds=new Set(items.map(i=>i.id));data().stockMovements=data().stockMovements.filter(m=>{if(itemIds.has(m.sourceItemId)||(m.orderId===id&&m.sourceItemId))return false;if(m.orderId===id){m.orderId='';m.notes=[m.notes,`Vínculo removido após exclusão da ${id}`].filter(Boolean).join(' · ');}return true;});data().orderItems=data().orderItems.filter(i=>i.orderId!==id);data().payments=data().payments.filter(p=>p.orderId!==id);data().consents=data().consents.filter(t=>t.orderId!==id);data().appointments.forEach(a=>{if(a.orderId===id)a.orderId='';});data().serviceOrders=data().serviceOrders.filter(x=>x.id!==id);await persist('OSV excluída com vínculos',id);closeModal();renderView();toast(`${id} excluída e vínculos tratados.`);}
+async function deleteOrder(id){const o=findOrder(id);if(!o)return;const items=orderItems(id),payments=orderPayments(id),terms=orderConsentItems(id),media=[...(o.photos||[]),...(o.pdfs||[]),...(o.attachments||[])];if(!await confirmAction(`Excluir definitivamente ${id}? Serão removidos ${items.length} item(ns), ${payments.length} lançamento(s), ${terms.length} termo(s) e ${media.length} arquivo(s). O estoque automático será revertido.`))return;if(!await confirmAction('Esta é a confirmação final. Um backup no Google Drive será criado antes da exclusão. Continuar?'))return;await MarcoStorage.createBackup(STATE,'antes-de-excluir-os');for(const m of media){if(m.localKey)await MarcoStorage.deleteMedia(m.localKey);if(m.driveFileId&&GoogleDriveMarco.isConfigured()){try{await GoogleDriveMarco.trash(m.driveFileId);}catch(e){console.warn(e);}}}const itemIds=new Set(items.map(i=>i.id));data().stockMovements=data().stockMovements.filter(m=>{if(itemIds.has(m.sourceItemId)||(m.orderId===id&&m.sourceItemId))return false;if(m.orderId===id){m.orderId='';m.notes=[m.notes,`Vínculo removido após exclusão da ${id}`].filter(Boolean).join(' · ');}return true;});data().orderItems=data().orderItems.filter(i=>i.orderId!==id);data().payments=data().payments.filter(p=>p.orderId!==id);data().consents=data().consents.filter(t=>t.orderId!==id);data().appointments.forEach(a=>{if(a.orderId===id)a.orderId='';});data().serviceOrders=data().serviceOrders.filter(x=>x.id!==id);await persist('OSV excluída com vínculos',id);closeModal();renderView();toast(`${id} excluída e vínculos tratados.`);}
 async function toggleCatalogStatus(kind,id){const list=kind==='product'?data().products:kind==='service'?data().services:data().supplies,item=list.find(x=>x.id===id);if(!item)return;item.status=item.status==='Inativo'?'Ativo':'Inativo';await persist(item.status==='Ativo'?'Cadastro restaurado':'Cadastro arquivado',`${id} · ${item.description}`);renderView();toast(item.status==='Ativo'?'Cadastro restaurado.':'Cadastro arquivado.');}
 async function deleteCatalogItem(kind,id){const list=kind==='product'?data().products:kind==='service'?data().services:data().supplies,item=list.find(x=>x.id===id);if(!item)return;const refs=data().orderItems.filter(i=>(kind==='product'&&i.productId===id)||(kind==='service'&&i.serviceId===id)||(kind==='supply'&&i.supplyId===id)).length,moves=data().stockMovements.filter(m=>(kind==='product'&&m.productId===id)||(kind==='supply'&&m.supplyId===id)).length;if(refs||moves)throw new Error(`Não é possível excluir: ${refs} item(ns) de OSV e ${moves} movimentação(ões) usam este cadastro. Arquive-o para manter o histórico.`);if(!await confirmAction(`Excluir definitivamente “${item.description}”?`))return;await MarcoStorage.createBackup(STATE,'antes-de-excluir-catalogo');if(kind==='product')data().products=data().products.filter(x=>x.id!==id);else if(kind==='service')data().services=data().services.filter(x=>x.id!==id);else data().supplies=data().supplies.filter(x=>x.id!==id);await persist('Cadastro de catálogo excluído',`${id} · ${item.description}`);renderView();toast('Cadastro excluído.');}
 async function deleteStockMovement(id){const m=data().stockMovements.find(x=>x.id===id);if(!m)return;if(m.sourceItemId)throw new Error('Movimentação automática: edite a OSV de origem.');if(!await confirmAction(`Excluir a movimentação ${id}? O saldo será recalculado automaticamente.`))return;await MarcoStorage.createBackup(STATE,'antes-de-excluir-movimento');data().stockMovements=data().stockMovements.filter(x=>x.id!==id);await persist('Movimentação de estoque excluída',id);renderView();toast('Movimentação excluída e saldo recalculado.');}
@@ -1036,26 +1158,23 @@ document.addEventListener('change',async e=>{
   if(e.target.matches('[data-item-field="type"]')){updateItemReference(e.target.closest('.item-editor-row'));return;}
   if(e.target.matches('[data-item-field="ref"]')){updateItemPrice(e.target.closest('.item-editor-row'));return;}
   if(e.target.matches('[data-stock-type]')){const form=e.target.closest('form'),type=e.target.value;form.querySelector('[data-stock-item]').innerHTML=itemReferenceOptions(type);return;}
-  if(e.target.matches('[data-setting]')){data().settings[e.target.dataset.setting]=e.target.checked;await persist('Preferência atualizada',e.target.dataset.setting);renderView();return;}
+  if(e.target.matches('[data-setting]')){const key=e.target.dataset.setting;if(key==='autosaveGoogle'||key==='autosaveFolder'){data().settings.autosaveGoogle=true;data().settings.autosaveFolder=false;e.target.checked=key==='autosaveGoogle';toast('O modo nuvem obrigatória não pode ser desativado.','warn');renderView();return;}data().settings[key]=e.target.checked;await persist('Preferência atualizada',key);renderView();return;}
 });
 document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'){e.preventDefault();manualSave();}if(e.key==='Escape'&&$('#modal-root').children.length)closeModal();});
 
-$('#json-import')?.addEventListener('change',async e=>{const input=e.target,file=input.files?.[0];if(!file)return;try{const incoming=await MarcoStorage.readUploadedJson(file);if(!await confirmAction('Importar este arquivo substituirá os dados atuais. Um backup local será criado antes. Continuar?'))return;await MarcoStorage.createBackup(STATE,'antes-da-importacao');STATE=incoming;await backupStateBeforeV220Migration(STATE,'importacao-json');normalizeState();await MarcoStorage.save(STATE);renderShell();toast('Dados privados importados com sucesso. Agora importe a pasta de fotos, PDFs e anexos.');}catch(err){toast(err.message,'error');}finally{input.value='';}});
+$('#json-import')?.addEventListener('change',async e=>{const input=e.target,file=input.files?.[0];if(!file)return;try{if(!navigator.onLine)throw new Error('Internet obrigatória para importar dados.');const incoming=await MarcoStorage.readUploadedJson(file);if(!await confirmAction('Importar este arquivo substituirá a base oficial do Google Drive. Um backup na nuvem será criado antes. Continuar?'))return;await MarcoStorage.createBackup(STATE,'antes-da-importacao');STATE=incoming;normalizeState();await persist('Dados privados importados','Importação JSON confirmada no Google Drive',{backup:true});renderShell();toast('Dados importados e confirmados no Google Drive. Agora importe fotos, PDFs e anexos.');}catch(err){toast(err.message,'error');}finally{input.value='';}});
 $('#media-import')?.addEventListener('change',async e=>{const input=e.target,files=[...(input.files||[])];if(!files.length)return;try{await importExistingMedia(files);}catch(err){console.error(err);toast(err.message||'Falha na importação de mídias.','error');}finally{input.value='';}});
 
 function startAutoBackupRotation(){
   clearInterval(AUTO_BACKUP_TIMER);
   AUTO_BACKUP_TIMER=setInterval(async()=>{
     try{
-      if(!STATE||LOCKED)return;
+      if(!STATE||LOCKED||!navigator.onLine||!GoogleDriveMarco.isConfigured())return;
       if(STATE.updatedAt===LAST_AUTO_BACKUP_AT)return;
-      await MarcoStorage.createBackup(STATE,'auto');
-      if(GoogleDriveMarco.isConfigured()){
-        await GoogleDriveMarco.writeAutosave(STATE,{force:false});
-        await publishBridgeConfirmed();
-      }
+      await GoogleDriveMarco.writeAutosave(STATE,{force:false});
+      await publishBridgeConfirmed();
       LAST_AUTO_BACKUP_AT=STATE.updatedAt;
-    }catch(e){console.warn('Backup automático falhou:',e);setSaveStatus('Dados salvos · backup automático pendente','warn');}
+    }catch(e){console.warn('Backup automático no Drive falhou:',e);setSaveStatus('Base no Drive · backup automático pendente','warn');}
   },60000);
 }
 
@@ -1079,25 +1198,34 @@ async function backupStateBeforeV220Migration(state,reason='carregamento'){
   if(!state||!stateNeedsV220Migration(state))return false;
   const sourceVersion=String(state.schemaVersion||'desconhecida'),preparedAt=nowIso(),snapshot=clone(state);
   snapshot.migrationPreparation={targetVersion:'2.2.0',sourceVersion,preparedAt,reason,inventory:v220MigrationInventory(state)};
-  await MarcoStorage.createBackup(snapshot,`antes-migracao-v2.2.0-${reason}`);
-  if(window.GoogleDriveMarco?.isConfigured?.()){
-    try{await GoogleDriveMarco.save(snapshot,{backup:true,reason:`antes-migracao-v2.2.0-${reason}`,interactive:false});}
-    catch(error){console.warn('Backup pré-migração no Google Drive ficou pendente:',error);}
+  if(window.GoogleDriveMarco?.isConfigured?.()&&navigator.onLine){
+    await GoogleDriveMarco.writeForceSave(snapshot);
   }
   return true;
 }
 
-async function boot(){
-  STATE=await MarcoStorage.load();
-  const migrated=await backupStateBeforeV220Migration(STATE,'inicializacao');
-  const normalized=normalizeState();
-  if(migrated||normalized===true)await MarcoStorage.save(STATE);
+function renderCloudRequired(message='Sem internet. O Marco Iris depende 100% do Google Drive.'){
   LOCKED=true;
+  window.MarcoBorionInterop?.setNotReady?.(message);
+  document.body.classList.add('login-page');
+  const root=$('#root');
+  if(root)root.innerHTML=`<main class="login-screen"><section class="lock-shell"><div class="lock-brand-panel"><div class="lock-brand-top"><img src="assets/marco-symbol.png" alt="Símbolo Marco Iris"><div><h1 class="lock-title">Marco Iris</h1><span class="lock-subtitle">Nuvem obrigatória</span></div></div><p class="lock-tagline">${esc(message)}</p></div><div class="login-card login-card-compact"><div class="profile-option"><div class="avatar">!</div><div class="spacer"><strong>Conexão necessária</strong><small>Nenhum dado é carregado ou salvo neste dispositivo.</small></div>${icon('cloud')}</div><button class="btn primary" type="button" onclick="location.reload()">Tentar novamente</button></div></section></main>`;
+}
+
+async function boot(){
+  await MarcoStorage.purgeLegacyData?.();
+  STATE=clone(window.MARCO_INITIAL_DATA);
+  normalizeState();
+  LAST_CONFIRMED_STATE=null;
+  LOCKED=true;
+  if(!navigator.onLine){renderCloudRequired();return;}
   renderLogin();
   if('serviceWorker' in navigator){
-    navigator.serviceWorker.register('./sw.js?v=2.4.4').then(reg=>reg?.update?.()).catch(e=>console.warn('Service worker:',e));
+    navigator.serviceWorker.register('./sw.js?v=2.5.0').then(reg=>reg?.update?.()).catch(e=>console.warn('Service worker:',e));
   }
   window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();window.__installPrompt=e;});
+  window.addEventListener('offline',()=>renderCloudRequired('A internet caiu. O aplicativo foi bloqueado para evitar qualquer alteração fora do Google Drive.'));
+  window.addEventListener('online',()=>{if(LOCKED)location.reload();});
   startAutoBackupRotation();
   startRemoteRefresh();
 }
