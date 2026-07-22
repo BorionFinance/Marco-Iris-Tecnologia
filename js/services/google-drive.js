@@ -217,7 +217,7 @@
   }
   async function writeInstallationManifest(rootIdValue,structure,state,user){
     if(!rootIdValue||!structure||!state)return null;
-    const manifest={schema:'marco.iris.installation',schemaVersion:1,appId:'marco-iris-tecnologia',appVersion:'2.4.2',createdOrUpdatedAt:new Date().toISOString(),companyInstanceId:companyIdOf(state),googleAccount:String(user?.email||''),rootFolderId:rootIdValue,folders:Object.fromEntries(Object.entries(FOLDERS).map(([key,name])=>[key,{name,id:structure[key]||''}]))};
+    const manifest={schema:'marco.iris.installation',schemaVersion:1,appId:'marco-iris-tecnologia',appVersion:'2.4.3',createdOrUpdatedAt:new Date().toISOString(),companyInstanceId:companyIdOf(state),googleAccount:String(user?.email||''),rootFolderId:rootIdValue,folders:Object.fromEntries(Object.entries(FOLDERS).map(([key,name])=>[key,{name,id:structure[key]||''}]))};
     const file=await resolveIntegrationFile(rootIdValue,INSTALLATION_FILE,true,manifest);
     await updateJson(file.id,manifest);
     const confirmed=await readJson(file.id);
@@ -370,6 +370,29 @@
       }
     },
     async sync(state,{interactive=false,backup=false,reason='sincronizacao'}={}){await this.ensureConnection(interactive);const f=this.currentFile||await this.findDataFile();if(!f){await this.save(state,{backup:true,reason:'primeira-sincronizacao'});return {direction:'local',created:true};}const remote=await this.load();const localRev=Math.max(0,Number(state?.driveSync?.revision)||0),remoteRev=Math.max(0,Number(remote.state?.driveSync?.revision)||0);if(remoteRev>localRev)return {direction:'remote',state:remote.state,meta:remote.meta};await this.save(state,{backup,reason});return {direction:'local',meta:this.currentFile};},
+    /* v2.4.3 — consulta passiva entre dispositivos. Lê a base oficial e só a aplica
+       quando a revisão do Drive é maior; não salva, não incrementa revisão e não
+       publica o bridge. Isso impede o computador ocioso de sobrescrever o celular. */
+    async pullIfNewer(state,{interactive=false}={}){
+      if(!state)throw new Error('Estado local indisponível para atualização.');
+      await this.ensureConnection(interactive);
+      const file=this.currentFile||await this.findDataFile();
+      if(!file)throw new Error('Ainda não existe um arquivo de dados nesta pasta.');
+      /* Consulta primeiro apenas os metadados. Na maioria das rodadas isso evita
+         baixar o current.json inteiro e deixa o aplicativo leve mesmo aberto o dia todo. */
+      const latestMeta=await meta(file.id),knownModified=String(this.currentFile?.modifiedTime||file.modifiedTime||''),latestModified=String(latestMeta.modifiedTime||'');
+      if(knownModified&&latestModified&&knownModified===latestModified){this.currentFile=latestMeta;return {updated:false,unchanged:true,meta:latestMeta};}
+      const remoteState=await readJson(file.id),check=validateOfficialState(remoteState);
+      if(!check.valid)throw new Error('A base oficial do Google Drive é inválida: '+check.errors.join(' '));
+      ensureCompanyId(remoteState);this.currentFile=latestMeta;
+      const localCompany=companyIdOf(state),remoteCompany=companyIdOf(remoteState);
+      if(localCompany&&remoteCompany&&localCompany!==remoteCompany){const error=new Error('A base remota pertence a outra instalação. A atualização automática foi bloqueada.');error.code='COMPANY_INSTANCE_CONFLICT';throw error;}
+      const localRev=Math.max(0,Number(state?.driveSync?.revision)||0),remoteRev=Math.max(0,Number(remoteState?.driveSync?.revision)||0);
+      if(remoteRev<=localRev)return {updated:false,localRev,remoteRev,meta:latestMeta};
+      const startedUpdatedAt=String(state.updatedAt||'');
+      await applyConfirmedState(state,remoteState,startedUpdatedAt);
+      return {updated:true,localRev,remoteRev,meta:latestMeta,state};
+    },
     async uploadBlob(blob,folderKey,fileName,existingId=''){const {structure}=await this.ensureConnection(false);const parent=structure[folderKey];if(!parent)throw new Error('Pasta de nuvem inválida.');let f=existingId?await meta(existingId).catch(()=>null):await findChild(parent,fileName);if(!f)f=await createMetadata({name:fileName,mimeType:blob.type||'application/octet-stream',parents:[parent]});return await uploadMediaContent(f.id,blob);},
     downloadBlob,meta,trash,
     async folderStatus(){const {structure}=await this.ensureConnection(false);return Object.entries(FOLDERS).map(([key,name])=>({key,name,id:structure[key],url:`https://drive.google.com/drive/folders/${structure[key]}`}));},

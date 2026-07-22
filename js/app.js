@@ -14,6 +14,11 @@ let AUTOSAVE_TIMER=null;
 let GOOGLE_TIMER=null;
 let CLOUD_RETRY_TIMER=null;
 let AUTO_BACKUP_TIMER=null;
+let REMOTE_REFRESH_TIMER=null;
+let REMOTE_REFRESH_INFLIGHT=null;
+let REMOTE_REFRESH_FOCUS_HANDLER=null;
+let REMOTE_REFRESH_VISIBILITY_HANDLER=null;
+const REMOTE_REFRESH_INTERVAL_MS=12000;
 let LAST_AUTO_BACKUP_AT='';
 let LOCKED=true;
 let LOCK_NETWORK=null;
@@ -201,6 +206,48 @@ async function persist(action='',detail='',opts={}){
   const queued=queueBackgroundSave({folder:opts.folder,google:opts.google,backup:!!opts.backup,media:opts.media,reason:action||detail||'alteracao'});
   if(opts.awaitRemote===true)return await queued;
   return {local:true,queued:true,folder:false,drive:false,bridge:false,errors:[]};
+}
+
+function hasUnsyncedLocalState(){
+  if(!STATE)return false;
+  if(BACKGROUND_SAVE_COMPLETED<BACKGROUND_SAVE_REQUESTED||BACKGROUND_SAVE_PROMISE)return true;
+  const localAt=Date.parse(String(STATE.updatedAt||'')),confirmedAt=Date.parse(String(STATE.driveSync?.updatedAt||''));
+  return Number.isFinite(localAt)&&(!Number.isFinite(confirmedAt)||localAt>confirmedAt+250);
+}
+async function refreshFromDriveIfNewer({reason='intervalo'}={}){
+  if(LOCKED||document.hidden||!STATE||!window.GoogleDriveMarco?.isConfigured?.())return {skipped:true,reason:'indisponivel'};
+  if(REMOTE_REFRESH_INFLIGHT)return await REMOTE_REFRESH_INFLIGHT;
+  /* Nunca troca o estado enquanto o Marco está preenchendo uma janela nem enquanto
+     existe alteração local esperando confirmação. A próxima rodada ocorre em 12 s. */
+  if(document.querySelector('#modal-root .modal')||hasUnsyncedLocalState())return {skipped:true,reason:'edicao-local'};
+  REMOTE_REFRESH_INFLIGHT=(async()=>{
+    try{
+      const result=await GoogleDriveMarco.pullIfNewer(STATE,{interactive:false});
+      if(!result?.updated)return result||{updated:false};
+      normalizeState();
+      window.MarcoBorionInterop?.prepareState?.(STATE);
+      await MarcoStorage.save(STATE,{touch:false});
+      if(!LOCKED)renderView('none');
+      setSaveStatus('Atualizado do Google Drive','ok');
+      return result;
+    }catch(error){
+      /* Polling é silencioso: falhas temporárias não interrompem o trabalho nem
+         acionam o bridge. A sincronização manual continua disponível. */
+      console.warn(`[REMOTE_REFRESH:${reason}]`,error);
+      return {updated:false,error};
+    }finally{REMOTE_REFRESH_INFLIGHT=null;}
+  })();
+  return await REMOTE_REFRESH_INFLIGHT;
+}
+function startRemoteRefresh(){
+  clearInterval(REMOTE_REFRESH_TIMER);
+  REMOTE_REFRESH_TIMER=setInterval(()=>refreshFromDriveIfNewer({reason:'intervalo-12s'}),REMOTE_REFRESH_INTERVAL_MS);
+  if(REMOTE_REFRESH_FOCUS_HANDLER)window.removeEventListener('focus',REMOTE_REFRESH_FOCUS_HANDLER);
+  if(REMOTE_REFRESH_VISIBILITY_HANDLER)document.removeEventListener('visibilitychange',REMOTE_REFRESH_VISIBILITY_HANDLER);
+  REMOTE_REFRESH_FOCUS_HANDLER=()=>setTimeout(()=>refreshFromDriveIfNewer({reason:'foco'}),350);
+  REMOTE_REFRESH_VISIBILITY_HANDLER=()=>{if(!document.hidden)setTimeout(()=>refreshFromDriveIfNewer({reason:'retorno-a-aba'}),350);};
+  window.addEventListener('focus',REMOTE_REFRESH_FOCUS_HANDLER,{passive:true});
+  document.addEventListener('visibilitychange',REMOTE_REFRESH_VISIBILITY_HANDLER,{passive:true});
 }
 function setSaveStatus(text,tone=''){const el=$('#save-status');if(el){el.textContent=text;el.dataset.tone=tone;}}
 function getViewMode(section,fallback=VIEW_MODE_DEFAULTS[section]||'list'){
@@ -620,7 +667,7 @@ function renderLogin(entry=''){
         <div class="lock-feature"><div class="lock-feature-icon">${icon('cloud')}</div><div><strong>Soluções em nuvem</strong><small>Fotos, PDFs, anexos e dados organizados no Google Drive.</small></div></div>
       </div>
     </section>
-    <footer class="lock-footer"><div class="lock-footer-cards"><div class="lock-footer-card"><strong><span class="status-dot-live"></span> Sistema operacional</strong><small>Interface pronta para uso.</small></div><div class="lock-footer-card"><strong>${icon('cloud')} Google Drive e backups</strong><small>Dados e arquivos em pastas separadas.</small></div><div class="lock-footer-card"><strong>${icon('download')} Aplicativo PWA</strong><small>Instalação no computador e celular.</small></div></div><div class="lock-footer-meta"><strong>Marco Iris Tecnologia © 2026</strong><span>v2.4.2</span></div></footer>
+    <footer class="lock-footer"><div class="lock-footer-cards"><div class="lock-footer-card"><strong><span class="status-dot-live"></span> Sistema operacional</strong><small>Interface pronta para uso.</small></div><div class="lock-footer-card"><strong>${icon('cloud')} Google Drive e backups</strong><small>Dados e arquivos em pastas separadas.</small></div><div class="lock-footer-card"><strong>${icon('download')} Aplicativo PWA</strong><small>Instalação no computador e celular.</small></div></div><div class="lock-footer-meta"><strong>Marco Iris Tecnologia © 2026</strong><span>v2.4.3</span></div></footer>
   </main>`;
   startLockNetwork();
 }
@@ -1040,9 +1087,10 @@ async function boot(){
   LOCKED=true;
   renderLogin();
   if('serviceWorker' in navigator){
-    navigator.serviceWorker.register('./sw.js?v=2.4.2').then(reg=>reg?.update?.()).catch(e=>console.warn('Service worker:',e));
+    navigator.serviceWorker.register('./sw.js?v=2.4.3').then(reg=>reg?.update?.()).catch(e=>console.warn('Service worker:',e));
   }
   window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();window.__installPrompt=e;});
   startAutoBackupRotation();
+  startRemoteRefresh();
 }
 window.MarcoAppBoot=()=>boot().catch(e=>{console.error(e);document.body.innerHTML=`<div class="empty"><h2>Não foi possível iniciar o sistema.</h2><p>${esc(e.message)}</p></div>`;});

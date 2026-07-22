@@ -46,3 +46,30 @@ input[data-money="true"]{font-variant-numeric:tabular-nums;text-align:right}
 /* Editor visual: supera a regra genérica de modal sem criar outra rolagem vertical concorrente. */
 html body #modal-root .modal.visual-layout-modal-v227>.modal-body{display:flex!important;flex-direction:column!important;min-height:0!important;overflow:hidden!important;padding:12px!important}
 html body #modal-root .modal.visual-layout-modal-v227>.modal-body>.layout-editor-v221{display:grid!important;flex:1 1 auto!important;width:100%!important;height:auto!important;min-width:0!important;min-height:0!important;grid-template-rows:auto minmax(0,1fr) auto!important;overflow:hidden!important}
+
+
+/* v2.4.3 — Nova OSV com fluxo contínuo: itens, pagamentos e fotos crescem com o conteúdo.
+   A única rolagem vertical permanece no corpo principal do modal. */
+#modal-root form[data-form="order"] [data-osv-component="itemsField"],
+#modal-root form[data-form="order"] [data-osv-component="paymentsField"],
+#modal-root form[data-form="order"] [data-osv-component="photosField"],
+#modal-root form[data-form="order"] #order-items-editor,
+#modal-root form[data-form="order"] #order-payments-editor,
+#modal-root form[data-form="order"] [data-photo-stage],
+#modal-root form[data-form="order"] .existing-media-editor,
+#modal-root form[data-form="order"] .staged-photo-grid{
+  height:auto!important;
+  max-height:none!important;
+  overflow:visible!important;
+  overscroll-behavior:auto!important;
+}
+#modal-root form[data-form="order"] [data-osv-component="itemsField"],
+#modal-root form[data-form="order"] [data-osv-component="paymentsField"],
+#modal-root form[data-form="order"] [data-osv-component="photosField"]{
+  scrollbar-width:none!important;
+}
+#modal-root form[data-form="order"] [data-osv-component="itemsField"]::-webkit-scrollbar,
+#modal-root form[data-form="order"] [data-osv-component="paymentsField"]::-webkit-scrollbar,
+#modal-root form[data-form="order"] [data-osv-component="photosField"]::-webkit-scrollbar{
+  display:none!important;
+}
