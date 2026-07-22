@@ -1,82 +1,46 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-BR">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Borion Finance</title>
-<meta name="description" content="Controle financeiro pessoal — receitas, despesas, cartões e patrimônio.">
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#060a10">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Borion Finance">
-<link rel="apple-touch-icon" href="icon-192.png">
-<link rel="shortcut icon" href="borion.ico">
-<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
-<script>
-(function(){
-  try{
-    var raw=localStorage.getItem('mc_config');
-    var cfg=raw?JSON.parse(raw):{};
-    var choice=cfg.theme||'dark';
-    var resolved=choice==='system'&&window.matchMedia? (window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark') : choice;
-    resolved = resolved==='light'?'light':'dark';
-    document.documentElement.setAttribute('data-theme', resolved);
-    document.documentElement.setAttribute('data-theme-choice', choice);
-    var meta=document.querySelector('meta[name="theme-color"]');
-    if(meta) meta.setAttribute('content', resolved==='light'?'#f7f2e7':'#060a10');
-  }catch(e){ document.documentElement.setAttribute('data-theme','dark'); }
-})();
-</script>
-<link rel="preload" href="css/styles.css?v=6.45.5" as="style">
-<link rel="preload" href="borion-emblem.png" as="image" type="image/png">
-<link rel="stylesheet" href="css/styles.css?v=6.45.5">
-  <link rel="stylesheet" href="css/borion-hub.css?v=6.45.5">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-visual">
+  <meta name="theme-color" content="#042344">
+  <meta name="description" content="Gestão completa de ordens de serviço, clientes, agenda, estoque, financeiro, fotos, PDFs e anexos da Marco Iris Soluções em Tecnologia.">
+  <title>Marco Iris Tecnologia</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="stylesheet" href="css/app.css?v=2.4.2">
+  <link rel="stylesheet" href="css/mobile-borion.css?v=2.4.2">
+  <link rel="stylesheet" href="css/borion-hub.css?v=2.4.2">
+  <link rel="stylesheet" href="css/pts-completo.css?v=2.4.2">
+  <link rel="stylesheet" href="css/validacao-final.css?v=2.4.2">
+  <link rel="stylesheet" href="css/personalization-v221.css?v=2.4.2">
+  <link rel="stylesheet" href="css/v227-corrections.css?v=2.4.2">
 </head>
 <body>
-<div id="root"><div id="borion-boot" class="borion-boot" role="status" aria-live="polite" aria-atomic="true"><div class="borion-boot-card"><div class="borion-boot-logo-wrap"><img class="borion-boot-logo" src="borion-emblem.png" alt="Borion Finance"></div><div class="borion-boot-brand">BORION FINANCE</div><div class="borion-boot-spinner" aria-hidden="true"><span></span></div><h1 id="borion-boot-title">Preparando o Borion</h1><p id="borion-boot-detail">Carregando os componentes essenciais</p><div class="borion-boot-progress" aria-label="Progresso da inicialização"><span id="borion-boot-progress-bar" style="width:4%"></span></div><div class="borion-boot-meta"><span id="borion-boot-connection">Verificando conexão</span><span id="borion-boot-elapsed" hidden></span></div><p class="borion-boot-safe">Seus dados continuam protegidos.</p><div id="borion-boot-slow" class="borion-boot-slow" hidden></div><div id="borion-boot-error" class="borion-boot-error" hidden></div></div></div></div>
-<div id="modal-root"></div>
-<div id="toast-root"></div>
-
-
-<script defer src="js/00-utils.js?v=6.45.5"></script>
-<script defer src="js/01i-boot-progress-v642.js?v=6.45.5"></script>
-<script defer src="js/01j-remote-update-v642.js?v=6.45.5"></script>
-<script defer src="js/01-storage-data-state.js?v=6.45.5"></script>
-<script defer src="js/01b-storage-provider.js?v=6.45.5"></script>
-<script defer src="js/01c-google-drive-provider.js?v=6.45.5"></script>
-<script defer src="js/01d-data-guard.js?v=6.45.5"></script>
-<script defer src="js/01e-sync-core-v640.js?v=6.45.5"></script>
-<script defer src="js/01f-sync-queue-v640.js?v=6.45.5"></script>
-<script defer src="js/01g-drive-journal-v640.js?v=6.45.5"></script>
-<script defer src="js/01h-multitab-v640.js?v=6.45.5"></script>
-<script defer src="js/18-order-preferences.js?v=6.45.5"></script>
-<script defer src="js/25-module-layout.js?v=6.45.5"></script>
-<script defer src="js/02-backup-local.js?v=6.45.5"></script>
-<script defer src="js/17-borion-cloud.js?v=6.45.5"></script>
-<script defer src="js/03-modals-shared.js?v=6.45.5"></script>
-<script defer src="js/04-gate-shell.js?v=6.45.5"></script>
-<script defer src="js/05-calculations-charts.js?v=6.45.5"></script>
-<script defer src="js/06-overview.js?v=6.45.5"></script>
-<script defer src="js/07-budget.js?v=6.45.5"></script>
-<script defer src="js/08-investments.js?v=6.45.5"></script>
-<script defer src="js/09-patrimony-goals.js?v=6.45.5"></script>
-<script defer src="js/10-cards-accounts.js?v=6.45.5"></script>
-<script defer src="js/11-agenda-notifications.js?v=6.45.5"></script>
-<script defer src="js/12-bank-filter-search.js?v=6.45.5"></script>
-<script defer src="js/13-settings.js?v=6.45.5"></script>
-<script defer src="js/19-subscriptions.js?v=6.45.5"></script>
-<script defer src="js/20-smartphone-mode.js?v=6.45.5"></script>
-<script defer src="js/21-smartphone-history.js?v=6.45.5"></script>
-<script defer src="js/22-mobile-experience.js?v=6.45.5"></script>
-<script defer src="js/15-cheques.js?v=6.45.5"></script>
-<script defer src="js/16-import-statement.js?v=6.45.5"></script>
-<script defer src="js/23-profile-import-review.js?v=6.45.5"></script>
-<script defer src="js/24-interconnections.js?v=6.45.5"></script>
-<script defer src="js/14-events-boot-pwa.js?v=6.45.5"></script>
-  <script defer src="js/borion-hub.js?v=6.45.5"></script>
-<script>window.addEventListener('load',()=>window.BorionInterop?.start());</script>
+  <div id="root"></div>
+  <div id="modal-root"></div>
+  <div id="toast-root" aria-live="polite"></div>
+  <div id="confirm-root"></div>
+  <input id="json-import" type="file" accept="application/json,.json" hidden>
+  <input id="media-import" type="file" accept="*/*" multiple webkitdirectory directory hidden>
+  <script defer src="js/data/initial-data.js?v=2.4.2"></script>
+  <script defer src="js/services/storage.js?v=2.4.2"></script>
+  <script defer src="js/services/identifiers.js?v=2.4.2"></script>
+  <script defer src="js/services/phone.js?v=2.4.2"></script>
+  <script defer src="js/services/money.js?v=2.4.2"></script>
+  <script defer src="js/services/finance-status.js?v=2.4.2"></script>
+  <script defer src="js/services/stock-health.js?v=2.4.2"></script>
+  <script defer src="js/services/google-drive.js?v=2.4.2"></script>
+  <script defer src="js/vendor/qrcode-local.js?v=2.4.2"></script>
+  <script defer src="js/services/pdf.js?v=2.4.2"></script>
+  <script defer src="js/services/borion-interop-source.js?v=2.4.2"></script>
+  <script defer src="js/app.js?v=2.4.2"></script>
+  <script defer src="js/personalization-v221.js?v=2.4.2"></script>
+  <script defer src="js/pts-completo.js?v=2.4.2"></script>
+  <script defer src="js/mobile-experience.js?v=2.4.2"></script>
+    <script defer src="js/borion-hub.js?v=2.4.2"></script>
+  <script defer src="js/v227-corrections.js?v=2.4.2"></script>
+<script>window.addEventListener('load',()=>window.MarcoBorionInterop?.start(()=>STATE));</script>
 </body>
 </html>
