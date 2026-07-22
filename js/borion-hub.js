@@ -1,11 +1,11 @@
 (function(){
   'use strict';
-  const APP = "marco";
+  const APP = "borion";
   const HUB_URL = "https://borionfinance.github.io/Borion-Hub/";
-  const LOGIN_SELECTOR = ".login-screen";
-  const SETTINGS_SELECTOR = ".nav-btn[data-view=\"settings\"]";
-  const MENU_CLASS = "nav-btn";
-  const HOUSE = "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\" focusable=\"false\"><path d=\"M3.5 10.8 12 3.9l8.5 6.9\"/><path d=\"M5.8 9.5v10.1h12.4V9.5\"/><path d=\"M9.6 19.6v-5.9h4.8v5.9\"/></svg>";
+  const LOGIN_SELECTOR = ".gate-wrap";
+  const SETTINGS_SELECTOR = ".sb-item[onclick*=\"settings\"]";
+  const MENU_CLASS = "sb-item";
+  const HOUSE = "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\" focusable=\"false\"><path d=\"M5 12l-2 0l9 -9l9 9l-2 0\"/><path d=\"M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7\"/><path d=\"M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6\"/></svg>";
 
   document.documentElement.dataset.borionApp = APP;
 
