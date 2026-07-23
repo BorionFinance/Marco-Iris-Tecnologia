@@ -6,7 +6,7 @@
      bloqueio de publicação antes da carga oficial e proteção contra snapshot vazio. */
   const SPEC = Object.freeze({
     schema: 'borion.interop.snapshot', schemaVersion: 2, bridgeVersion: '3.0.1',
-    sourceAppId: 'marco-iris', sourceAppName: 'Marco Iris Tecnologia', sourceAppVersion: '2.4.2',
+    sourceAppId: 'marco-iris', sourceAppName: 'Marco Iris Tecnologia', sourceAppVersion: '2.5.4',
     targetProfileAlias: 'default', snapshotFile: 'marco-iris.bridge.json', ackFile: 'marco-iris.ack.json',
     integrationFolder: 'Borion_Integracoes'
   });
@@ -32,7 +32,8 @@
   }
   function hash(value){const text=typeof value==='string'?value:stableStringify(value);let h=2166136261;for(let i=0;i<text.length;i+=1){h^=text.charCodeAt(i);h=Math.imul(h,16777619);}return ('00000000'+(h>>>0).toString(16)).slice(-8);}
   function activeData(state){if(!state||!state.dataByProfile)return null;const id=state.activeProfileId||(state.profiles&&state.profiles[0]&&state.profiles[0].id);return id?state.dataByProfile[id]:null;}
-  function countSourceRecords(state){const data=activeData(state);return data&&Array.isArray(data.payments)?data.payments.length:0;}
+  function isBridgeExcluded(item){return !!(item?.excludeFromBorion||item?.bridgeEligible===false||(item?.legacyImported&&item?.migrationOrigin==='MarcoIris-AppSheet-Legacy'));}
+  function countSourceRecords(state){const data=activeData(state);return data&&Array.isArray(data.payments)?data.payments.filter(item=>!isBridgeExcluded(item)).length:0;}
 
   function ensureBridgeState(state){
     if(!state||typeof state!=='object')throw new Error('Estado do Marco Iris indisponível.');
@@ -69,7 +70,7 @@
   function externalReference(item,orderId){return String(item.externalReference||[orderId,item.id].filter(Boolean).join(':')||item.id);}
 
   function projectRecord(item,state,bridge){
-    if(!item||!item.id)return null;const data=activeData(state)||{};const order=(data.serviceOrders||[]).find(x=>String(x.id)===String(item.orderId));
+    if(!item||!item.id||isBridgeExcluded(item))return null;const data=activeData(state)||{};const order=(data.serviceOrders||[]).find(x=>String(x.id)===String(item.orderId));
     const status=statusCode(item),direction=normalize(item.type)==='despesa'?'expense':'income',amount=Math.round((Number(item.value)||0)*100)/100;
     const entityId=String(item.code||item.id),receiptId=entityId,orderNumber=String(item.orderId||order?.id||''),clientName=clientForPayment(data,item,order),method=paymentMethodLabel(item),isIncome=direction==='income';
     const description=isIncome?`${orderNumber||'Sem OSV'} • ${clientName||'Cliente não informado'}`:expenseName(item,order);
@@ -186,6 +187,6 @@
 
   window.MarcoBorionInterop=Object.freeze({spec:SPEC,start,stop,schedule,publish,prepareState,setReady,setNotReady,pause,resume,getRuntimeStatus,
     forceSync:state=>publish(state||(stateGetter&&stateGetter()),{forceAfterValidation:canPublish()}),getStatus(state){return clone(ensureBridgeState(state||(stateGetter&&stateGetter())));},
-    __test:{hash,stableStringify,projectRecord,projectRecords,reconcileState,applyAcknowledgement,statusCode,paymentMethodLabel,validateCandidateAgainstRemote,ensureBridgeState,getDeviceId,canPublish,setReady,setNotReady,pause,resume,getRuntimeStatus,countSourceRecords,runPublishLoop,requestPublish,publishOnce}
+    __test:{hash,stableStringify,isBridgeExcluded,projectRecord,projectRecords,reconcileState,applyAcknowledgement,statusCode,paymentMethodLabel,validateCandidateAgainstRemote,ensureBridgeState,getDeviceId,canPublish,setReady,setNotReady,pause,resume,getRuntimeStatus,countSourceRecords,runPublishLoop,requestPublish,publishOnce}
   });
 })();

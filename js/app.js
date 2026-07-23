@@ -5,7 +5,7 @@ let CURRENT_VIEW='dashboard';
 let SEARCH='';
 let ACTIVE_TAB={stock:'products',catalog:'services',documents:'consents'};
 let SHOW_ARCHIVED={orders:false,clients:false,catalog:false};
-const VIEW_MODE_DEFAULTS={orders:'list',agenda:'cards',clients:'list',finance:'list',stock:'list',catalog:'list',documents:'list'};
+const VIEW_MODE_DEFAULTS={orders:'list',agenda:'cards',clients:'list',finance:'list',stock:'list',catalog:'list',documents:'list','catalog.services':'list','catalog.products':'list','catalog.supplies':'list','catalog.movements':'list'};
 let AGENDA_CURSOR='';
 let AGENDA_SELECTED='';
 let NAVIGATION_BUSY=false;
@@ -561,15 +561,21 @@ function confirmAction(message,{title='Confirmar ação',confirmLabel='Confirmar
   });
 }
 function nextCode(prefix,list,width=6,field='id'){
-  const normalized=String(prefix||'').toUpperCase(),settings=data()?.settings||(data().settings={}),nextIds=settings.nextIds||(settings.nextIds={}),high=Math.max(0,Number(nextIds[normalized])||0);
-  if(window.MarcoIdentifiers){
-    const code=window.MarcoIdentifiers.getNextEntityCode(normalized,list,field,high),parsed=window.MarcoIdentifiers.parseEntityCode(code,normalized);
-    if(parsed)nextIds[normalized]=Math.max(high,parsed.sequence);
-    return code;
+  const normalized=String(prefix||'').toUpperCase(),settings=data()?.settings||(data().settings={}),nextIds=settings.nextIds||(settings.nextIds={});
+  const configuredNext=Math.max(1,Number(nextIds[normalized])||1);
+  let maxExisting=0;
+  for(const x of list||[]){
+    if((normalized==='REC'||normalized==='DES')){
+      const recordPrefix=/despesa/i.test(String(x?.type||''))?'DES':'REC';
+      if(recordPrefix!==normalized)continue;
+    }
+    const raw=x?.[field]||x?.id||x?.code||'';
+    const parsed=window.MarcoIdentifiers?.parseEntityCode?.(raw,normalized);
+    const sequence=parsed?.sequence||Number(String(raw).replace(/\D/g,''))||0;
+    maxExisting=Math.max(maxExisting,sequence);
   }
-  let max=high;for(const x of list){const digits=String(x?.[field]||'').replace(/\D/g,'');if(digits)max=Math.max(max,Number(digits)||0);}
-  nextIds[normalized]=max+1;
-  return `${normalized}-${String(max+1).padStart(width,'0')}`;
+  const sequence=Math.max(configuredNext,maxExisting+1,1);
+  return window.MarcoIdentifiers?.formatEntityCode?.(normalized,sequence)||`${normalized}-${String(sequence).padStart(width,'0')}`;
 }
 function matches(...values){
   if(!SEARCH)return true;const q=norm(SEARCH);
@@ -702,7 +708,7 @@ function renderLogin(entry=''){
         <div class="lock-feature"><div class="lock-feature-icon">${icon('cloud')}</div><div><strong>Soluções em nuvem</strong><small>Fotos, PDFs, anexos e dados organizados no Google Drive.</small></div></div>
       </div>
     </section>
-    <footer class="lock-footer"><div class="lock-footer-cards"><div class="lock-footer-card"><strong><span class="status-dot-live"></span> Sistema operacional</strong><small>Interface pronta para uso.</small></div><div class="lock-footer-card"><strong>${icon('cloud')} Google Drive e backups</strong><small>Dados e arquivos em pastas separadas.</small></div><div class="lock-footer-card"><strong>${icon('download')} Aplicativo PWA</strong><small>Instalação no computador e celular.</small></div></div><div class="lock-footer-meta"><strong>Marco Iris Tecnologia © 2026</strong><span>v2.5.0</span></div></footer>
+    <footer class="lock-footer"><div class="lock-footer-cards"><div class="lock-footer-card"><strong><span class="status-dot-live"></span> Sistema operacional</strong><small>Interface pronta para uso.</small></div><div class="lock-footer-card"><strong>${icon('cloud')} Google Drive e backups</strong><small>Dados e arquivos em pastas separadas.</small></div><div class="lock-footer-card"><strong>${icon('download')} Aplicativo PWA</strong><small>Instalação no computador e celular.</small></div></div><div class="lock-footer-meta"><strong>Marco Iris Tecnologia © 2026</strong><span>v2.5.4</span></div></footer>
   </main>`;
   startLockNetwork();
 }
@@ -953,7 +959,7 @@ async function addPhotosToOrder(order,files){
   }
 }
 function findMedia(mediaId){for(const o of data().serviceOrders){for(const m of [...(o.photos||[]),...(o.pdfs||[]),...(o.attachments||[])])if(m.id===mediaId)return {meta:m,order:o};}const m=data().attachments.find(x=>x.id===mediaId);return m?{meta:m,order:null}:null;}
-async function getMediaBlob(meta){if(!meta)return null;if(meta.localKey){const rec=await MarcoStorage.getMedia(meta.localKey);if(rec?.blob)return rec.blob;}if(meta.driveFileId&&GoogleDriveMarco.isConfigured()){const blob=await GoogleDriveMarco.downloadBlob(meta.driveFileId);const rec=await MarcoStorage.putMedia(blob,{name:meta.fileName,type:blob.type});meta.localKey=rec.id;return blob;}return null;}
+async function getMediaBlob(meta){if(!meta)return null;if(meta.localKey){const rec=await MarcoStorage.getMedia(meta.localKey);if(rec?.blob)return rec.blob;}if(meta.driveFileId&&GoogleDriveMarco.isConfigured()){const blob=await GoogleDriveMarco.downloadBlob(meta.driveFileId);const rec=await MarcoStorage.putMedia(blob,{name:meta.fileName,type:blob.type});meta.localKey=rec.id;return blob;}if(meta.migrationPath){const response=await fetch(meta.migrationPath,{cache:'no-store'});if(response.ok){const blob=await response.blob();const rec=await MarcoStorage.putMedia(blob,{name:meta.fileName,type:blob.type});meta.localKey=rec.id;return blob;}}return null;}
 async function hydrateMediaImages(){for(const img of $$('img[data-media-id]')){const found=findMedia(img.dataset.mediaId);if(!found)continue;try{const blob=await getMediaBlob(found.meta);if(blob){const url=URL.createObjectURL(blob);img.src=url;img.onload=()=>setTimeout(()=>URL.revokeObjectURL(url),1000);}else{img.removeAttribute('src');img.alt='Importe a mídia privada para visualizar esta foto.';}}catch(e){console.warn(e);}}}
 async function importExistingMedia(files){
   if(!navigator.onLine||!GoogleDriveMarco.isConfigured())throw new Error('Internet e Google Drive são obrigatórios para importar mídias.');
@@ -982,7 +988,7 @@ async function importExistingMedia(files){
 }
 async function syncPendingMedia(){
   if(!GoogleDriveMarco.isConfigured())return 0;let count=0;
-  for(const o of data().serviceOrders){for(const [list,folder] of [[o.photos||[],'photos'],[o.pdfs||[],'pdfs'],[o.attachments||[],'attachments']]){for(const m of list){if(m.localKey&&!m.driveFileId){const b=await getMediaBlob(m);if(b){const fileName=canonicalOrderMediaName(o.id,m.fileName||'arquivo');m.fileName=fileName;const r=await GoogleDriveMarco.uploadBlob(b,folder,fileName);m.driveFileId=r.id;m.webViewLink=r.webViewLink||'';count++;}}}}}
+  for(const o of data().serviceOrders){for(const [list,folder] of [[o.photos||[],'photos'],[o.pdfs||[],'pdfs'],[o.attachments||[],'attachments']]){for(const m of list){if(!m.driveFileId&&(m.localKey||m.migrationPath)){const b=await getMediaBlob(m);if(b){const fileName=canonicalOrderMediaName(o.id,m.fileName||'arquivo');m.fileName=fileName;const r=await GoogleDriveMarco.uploadBlob(b,folder,fileName);m.driveFileId=r.id;m.webViewLink=r.webViewLink||'';count++;}}}}}
   return count;
 }
 async function generatePdfForOrder(orderId,share=false){
@@ -1221,7 +1227,7 @@ async function boot(){
   if(!navigator.onLine){renderCloudRequired();return;}
   renderLogin();
   if('serviceWorker' in navigator){
-    navigator.serviceWorker.register('./sw.js?v=2.5.0').then(reg=>reg?.update?.()).catch(e=>console.warn('Service worker:',e));
+    navigator.serviceWorker.register('./sw.js?v=2.5.4').then(reg=>reg?.update?.()).catch(e=>console.warn('Service worker:',e));
   }
   window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();window.__installPrompt=e;});
   window.addEventListener('offline',()=>renderCloudRequired('A internet caiu. O aplicativo foi bloqueado para evitar qualquer alteração fora do Google Drive.'));

@@ -255,7 +255,7 @@
   }
   async function writeInstallationManifest(rootIdValue,structure,state,user){
     if(!rootIdValue||!structure||!state)return null;
-    const manifest={schema:'marco.iris.installation',schemaVersion:1,appId:'marco-iris-tecnologia',appVersion:'2.5.0',createdOrUpdatedAt:new Date().toISOString(),companyInstanceId:companyIdOf(state),googleAccount:String(user?.email||''),rootFolderId:rootIdValue,folders:Object.fromEntries(Object.entries(FOLDERS).map(([key,name])=>[key,{name,id:structure[key]||''}]))};
+    const manifest={schema:'marco.iris.installation',schemaVersion:1,appId:'marco-iris-tecnologia',appVersion:'2.5.4',createdOrUpdatedAt:new Date().toISOString(),companyInstanceId:companyIdOf(state),googleAccount:String(user?.email||''),rootFolderId:rootIdValue,folders:Object.fromEntries(Object.entries(FOLDERS).map(([key,name])=>[key,{name,id:structure[key]||''}]))};
     const file=await resolveIntegrationFile(rootIdValue,INSTALLATION_FILE,true,manifest);
     await updateJson(file.id,manifest);
     const confirmed=await readJson(file.id);
@@ -456,13 +456,38 @@
       await applyConfirmedState(state,remoteState,startedSnapshot);
       return {updated:true,localRev,remoteRev,meta:latestMeta,state};
     },
-    async uploadBlob(blob,folderKey,fileName,existingId=''){const {structure}=await this.ensureConnection(false);const parent=structure[folderKey];if(!parent)throw new Error('Pasta de nuvem inválida.');let f=existingId?await meta(existingId).catch(()=>null):await findChild(parent,fileName);if(!f)f=await createMetadata({name:fileName,mimeType:blob.type||'application/octet-stream',parents:[parent]});return await uploadMediaContent(f.id,blob);},
+    async uploadBlob(blob,folderKey,fileName,existingId='',expectedSha256=''){
+      const {structure}=await this.ensureConnection(false),parent=structure[folderKey];
+      if(!parent)throw new Error('Pasta de nuvem inválida.');
+      let f=existingId?await meta(existingId).catch(()=>null):await findChild(parent,fileName),created=false;
+      if(f&&!existingId&&expectedSha256){
+        const existingBlob=await downloadBlob(f.id),digest=await crypto.subtle.digest('SHA-256',await existingBlob.arrayBuffer());
+        const existingHash=[...new Uint8Array(digest)].map(byte=>byte.toString(16).padStart(2,'0')).join('');
+        if(existingHash===expectedSha256)return {...f,created:false,reused:true,sha256:existingHash};
+        const error=new Error(`Já existe no Google Drive um arquivo diferente chamado “${fileName}”. A migração foi bloqueada para não sobrescrevê-lo.`);error.code='MEDIA_NAME_CONFLICT';throw error;
+      }
+      if(!f){f=await createMetadata({name:fileName,mimeType:blob.type||'application/octet-stream',parents:[parent]});created=true;}
+      const uploaded=await uploadMediaContent(f.id,blob);return {...uploaded,created,reused:false};
+    },
+    async restoreOfficialSnapshot(snapshot,{reason='rollback'}={}){
+      const clean=jsonClone(snapshot||{}),check=validateOfficialState(clean);if(!check.valid)throw new Error('O snapshot de rollback é inválido: '+check.errors.join(' '));
+      const {structure}=await this.ensureConnection(false),file=this.currentFile||await resolveDataFile(structure.data);if(!file)throw new Error('A base oficial não foi localizada para rollback.');
+      const remote=await readJson(file.id),remoteCheck=validateOfficialState(remote);if(!remoteCheck.valid)throw new Error('A base remota atual é inválida: '+remoteCheck.errors.join(' '));
+      const localCompany=companyIdOf(clean),remoteCompany=companyIdOf(remote);if(localCompany&&remoteCompany&&localCompany!==remoteCompany){const error=new Error('O rollback pertence a outra instalação e foi bloqueado.');error.code='COMPANY_INSTANCE_CONFLICT';throw error;}
+      await writeRotatingBackup(structure.backups,remote,{kind:'forcesave',force:true});
+      const backupName=`Marco_Iris_antes_${String(reason||'rollback').replace(/[^a-zA-Z0-9_-]/g,'-')}_${stamp()}.json`,backupFile=await createMetadata({name:backupName,mimeType:'application/json',parents:[structure.backups]});await updateJson(backupFile.id,remote);
+      const prepared=await prepareOfficialState(clean,remote);prepared.driveSync.rollbackReason=String(reason||'rollback');prepared.driveSync.rollbackAt=new Date().toISOString();
+      const updated=await updateJson(file.id,prepared),confirmed=await readJson(file.id),confirmedCheck=validateOfficialState(confirmed);
+      if(!confirmedCheck.valid||confirmed?.driveSync?.checksum!==prepared.driveSync.checksum)throw new Error('O rollback não foi confirmado pelo Google Drive.');
+      this.currentFile=updated;if(window.MarcoStorage?.saveSyncBase)await window.MarcoStorage.saveSyncBase(confirmed);return {file:updated,state:confirmed,backupFile};
+    },
     downloadBlob,meta,trash,
     async folderStatus(){const {structure}=await this.ensureConnection(false);return Object.entries(FOLDERS).map(([key,name])=>({key,name,id:structure[key],url:`https://drive.google.com/drive/folders/${structure[key]}`}));},
     /* BORION INTEROP v1.0.0 — protected transport seam. */
     async integrationFolderId(){const {structure}=await this.ensureConnection(false);return structure.integration;},
     async writeIntegrationJson(name,obj){const folderId=await this.integrationFolderId();const f=await resolveIntegrationFile(folderId,name,true,obj);return await updateJson(f.id,obj);},
     async readIntegrationJson(name){const folderId=await this.integrationFolderId();const f=await resolveIntegrationFile(folderId,name,false,null);return f?await readJson(f.id):null;},
+    async writeBackupJson(name,obj){const {structure}=await this.ensureConnection(false);const safeName=String(name||`backup-${stamp()}.json`).replace(/[\\/:*?"<>|]/g,'-');const f=await createMetadata({name:safeName,mimeType:'application/json',parents:[structure.backups]});await updateJson(f.id,obj);const confirmed=await readJson(f.id);return {file:f,state:confirmed};},
     enqueueSave,flushSaveQueue,
     async writeAutosave(state,{force=false}={}){const {structure}=await this.ensureConnection(false);return await writeRotatingBackup(structure.backups,state,{kind:'autosave',force});},
     async writeForceSave(state){const {structure}=await this.ensureConnection(false);return await writeRotatingBackup(structure.backups,state,{kind:'forcesave',force:true});},
