@@ -5,7 +5,7 @@ let CURRENT_VIEW='dashboard';
 let SEARCH='';
 let ACTIVE_TAB={stock:'products',catalog:'services',documents:'consents'};
 let SHOW_ARCHIVED={orders:false,clients:false,catalog:false};
-const VIEW_MODE_DEFAULTS={orders:'list',agenda:'cards',clients:'list',finance:'list',stock:'list',catalog:'list',documents:'list','catalog.services':'list','catalog.products':'list','catalog.supplies':'list','catalog.movements':'list'};
+const VIEW_MODE_DEFAULTS={orders:'list',agenda:'cards',clients:'list',finance:'list',stock:'list',catalog:'list',documents:'list'};
 let AGENDA_CURSOR='';
 let AGENDA_SELECTED='';
 let NAVIGATION_BUSY=false;
@@ -561,21 +561,15 @@ function confirmAction(message,{title='Confirmar ação',confirmLabel='Confirmar
   });
 }
 function nextCode(prefix,list,width=6,field='id'){
-  const normalized=String(prefix||'').toUpperCase(),settings=data()?.settings||(data().settings={}),nextIds=settings.nextIds||(settings.nextIds={});
-  const configuredNext=Math.max(1,Number(nextIds[normalized])||1);
-  let maxExisting=0;
-  for(const x of list||[]){
-    if((normalized==='REC'||normalized==='DES')){
-      const recordPrefix=/despesa/i.test(String(x?.type||''))?'DES':'REC';
-      if(recordPrefix!==normalized)continue;
-    }
-    const raw=x?.[field]||x?.id||x?.code||'';
-    const parsed=window.MarcoIdentifiers?.parseEntityCode?.(raw,normalized);
-    const sequence=parsed?.sequence||Number(String(raw).replace(/\D/g,''))||0;
-    maxExisting=Math.max(maxExisting,sequence);
+  const normalized=String(prefix||'').toUpperCase(),settings=data()?.settings||(data().settings={}),nextIds=settings.nextIds||(settings.nextIds={}),high=Math.max(0,Number(nextIds[normalized])||0);
+  if(window.MarcoIdentifiers){
+    const code=window.MarcoIdentifiers.getNextEntityCode(normalized,list,field,high),parsed=window.MarcoIdentifiers.parseEntityCode(code,normalized);
+    if(parsed)nextIds[normalized]=Math.max(high,parsed.sequence);
+    return code;
   }
-  const sequence=Math.max(configuredNext,maxExisting+1,1);
-  return window.MarcoIdentifiers?.formatEntityCode?.(normalized,sequence)||`${normalized}-${String(sequence).padStart(width,'0')}`;
+  let max=high;for(const x of list){const digits=String(x?.[field]||'').replace(/\D/g,'');if(digits)max=Math.max(max,Number(digits)||0);}
+  nextIds[normalized]=max+1;
+  return `${normalized}-${String(max+1).padStart(width,'0')}`;
 }
 function matches(...values){
   if(!SEARCH)return true;const q=norm(SEARCH);
@@ -708,7 +702,7 @@ function renderLogin(entry=''){
         <div class="lock-feature"><div class="lock-feature-icon">${icon('cloud')}</div><div><strong>Soluções em nuvem</strong><small>Fotos, PDFs, anexos e dados organizados no Google Drive.</small></div></div>
       </div>
     </section>
-    <footer class="lock-footer"><div class="lock-footer-cards"><div class="lock-footer-card"><strong><span class="status-dot-live"></span> Sistema operacional</strong><small>Interface pronta para uso.</small></div><div class="lock-footer-card"><strong>${icon('cloud')} Google Drive e backups</strong><small>Dados e arquivos em pastas separadas.</small></div><div class="lock-footer-card"><strong>${icon('download')} Aplicativo PWA</strong><small>Instalação no computador e celular.</small></div></div><div class="lock-footer-meta"><strong>Marco Iris Tecnologia © 2026</strong><span>v2.5.4</span></div></footer>
+    <footer class="lock-footer"><div class="lock-footer-cards"><div class="lock-footer-card"><strong><span class="status-dot-live"></span> Sistema operacional</strong><small>Interface pronta para uso.</small></div><div class="lock-footer-card"><strong>${icon('cloud')} Google Drive e backups</strong><small>Dados e arquivos em pastas separadas.</small></div><div class="lock-footer-card"><strong>${icon('download')} Aplicativo PWA</strong><small>Instalação no computador e celular.</small></div></div><div class="lock-footer-meta"><strong>Marco Iris Tecnologia © 2026</strong><span>v2.5.1</span></div></footer>
   </main>`;
   startLockNetwork();
 }
@@ -1227,7 +1221,7 @@ async function boot(){
   if(!navigator.onLine){renderCloudRequired();return;}
   renderLogin();
   if('serviceWorker' in navigator){
-    navigator.serviceWorker.register('./sw.js?v=2.5.4').then(reg=>reg?.update?.()).catch(e=>console.warn('Service worker:',e));
+    navigator.serviceWorker.register('./sw.js?v=2.5.1').then(reg=>reg?.update?.()).catch(e=>console.warn('Service worker:',e));
   }
   window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();window.__installPrompt=e;});
   window.addEventListener('offline',()=>renderCloudRequired('A internet caiu. O aplicativo foi bloqueado para evitar qualquer alteração fora do Google Drive.'));
