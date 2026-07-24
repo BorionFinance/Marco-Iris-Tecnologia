@@ -2,7 +2,7 @@
   'use strict';
 
   /*
-   * Marco Iris Cloud-Only Storage (v2.5.1)
+   * Marco Iris Cloud-Only Storage (v2.6.2)
    * ---------------------------------------
    * Nenhum dado de negócio é persistido no navegador. Clientes, OSVs,
    * lançamentos, exclusões, rascunhos e mídias existem apenas em memória até

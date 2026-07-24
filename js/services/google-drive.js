@@ -255,7 +255,7 @@
   }
   async function writeInstallationManifest(rootIdValue,structure,state,user){
     if(!rootIdValue||!structure||!state)return null;
-    const manifest={schema:'marco.iris.installation',schemaVersion:1,appId:'marco-iris-tecnologia',appVersion:'2.5.1',createdOrUpdatedAt:new Date().toISOString(),companyInstanceId:companyIdOf(state),googleAccount:String(user?.email||''),rootFolderId:rootIdValue,folders:Object.fromEntries(Object.entries(FOLDERS).map(([key,name])=>[key,{name,id:structure[key]||''}]))};
+    const manifest={schema:'marco.iris.installation',schemaVersion:1,appId:'marco-iris-tecnologia',appVersion:'2.6.2',createdOrUpdatedAt:new Date().toISOString(),companyInstanceId:companyIdOf(state),googleAccount:String(user?.email||''),rootFolderId:rootIdValue,folders:Object.fromEntries(Object.entries(FOLDERS).map(([key,name])=>[key,{name,id:structure[key]||''}]))};
     const file=await resolveIntegrationFile(rootIdValue,INSTALLATION_FILE,true,manifest);
     await updateJson(file.id,manifest);
     const confirmed=await readJson(file.id);

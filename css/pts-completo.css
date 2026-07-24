@@ -796,3 +796,26 @@ input[type="date"].date-input-rejected,input[type="month"].date-input-rejected{
 .order-detail-totals.detailed span{display:flex;justify-content:space-between;gap:12px}
 .order-detail-totals.detailed strong{grid-column:1/-1;display:flex;justify-content:flex-end;padding-top:10px;border-top:1px solid var(--border,#dce3ec)}
 @media(max-width:620px){.order-detail-totals.detailed{grid-template-columns:1fr}.order-detail-totals.detailed strong{grid-column:auto}}
+
+
+/* v2.6.4 — campos de data: remover ícone duplicado e manter somente o seletor nativo funcional */
+html body #modal-root .modal input[type="date"],
+html body #modal-root .modal input[type="month"],
+html body #root input[type="date"],
+html body #root input[type="month"]{
+  -webkit-appearance:auto!important;
+  appearance:auto!important;
+  padding-right:14px!important;
+  background-image:none!important;
+  background-repeat:initial!important;
+  background-position:initial!important;
+  background-size:auto!important;
+}
+html body #modal-root .modal input[type="date"]::-webkit-calendar-picker-indicator,
+html body #modal-root .modal input[type="month"]::-webkit-calendar-picker-indicator,
+html body #root input[type="date"]::-webkit-calendar-picker-indicator,
+html body #root input[type="month"]::-webkit-calendar-picker-indicator{
+  display:block!important;
+  opacity:1!important;
+  cursor:pointer!important;
+}

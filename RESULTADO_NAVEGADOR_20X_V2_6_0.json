@@ -1,0 +1,134 @@
+{
+  "runs": [
+    {
+      "run": 1,
+      "passed": 39,
+      "total": 39,
+      "failures": []
+    },
+    {
+      "run": 2,
+      "passed": 39,
+      "total": 39,
+      "failures": []
+    },
+    {
+      "run": 3,
+      "passed": 39,
+      "total": 39,
+      "failures": []
+    },
+    {
+      "run": 4,
+      "passed": 39,
+      "total": 39,
+      "failures": []
+    },
+    {
+      "run": 5,
+      "passed": 39,
+      "total": 39,
+      "failures": []
+    },
+    {
+      "run": 6,
+      "passed": 39,
+      "total": 39,
+      "failures": []
+    },
+    {
+      "run": 7,
+      "passed": 39,
+      "total": 39,
+      "failures": []
+    },
+    {
+      "run": 8,
+      "passed": 39,
+      "total": 39,
+      "failures": []
+    },
+    {
+      "run": 9,
+      "passed": 39,
+      "total": 39,
+      "failures": []
+    },
+    {
+      "run": 10,
+      "passed": 39,
+      "total": 39,
+      "failures": []
+    },
+    {
+      "run": 11,
+      "passed": 39,
+      "total": 39,
+      "failures": []
+    },
+    {
+      "run": 12,
+      "passed": 39,
+      "total": 39,
+      "failures": []
+    },
+    {
+      "run": 13,
+      "passed": 39,
+      "total": 39,
+      "failures": []
+    },
+    {
+      "run": 14,
+      "passed": 39,
+      "total": 39,
+      "failures": []
+    },
+    {
+      "run": 15,
+      "passed": 39,
+      "total": 39,
+      "failures": []
+    },
+    {
+      "run": 16,
+      "passed": 39,
+      "total": 39,
+      "failures": []
+    },
+    {
+      "run": 17,
+      "passed": 39,
+      "total": 39,
+      "failures": []
+    },
+    {
+      "run": 18,
+      "passed": 39,
+      "total": 39,
+      "failures": []
+    },
+    {
+      "run": 19,
+      "passed": 39,
+      "total": 39,
+      "failures": []
+    },
+    {
+      "run": 20,
+      "passed": 39,
+      "total": 39,
+      "failures": []
+    }
+  ],
+  "total": 780,
+  "passed": 780,
+  "allPassed": true,
+  "failures": [],
+  "mobile": {
+    "topActions": 3,
+    "eyeDisplay": "grid",
+    "lockDisplay": "grid",
+    "overflow": true
+  }
+}

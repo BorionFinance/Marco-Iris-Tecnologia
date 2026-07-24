@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  const VERSION='2.5.1';
+  const VERSION='2.6.4';
   const SCHEMA=9;
   const SNAP_DISTANCE=8;
   const HISTORY_LIMIT=30;
@@ -17,39 +17,39 @@
     ['{{cliente.nome}}','Cliente — Nome'],['{{cliente.telefone}}','Cliente — Telefone'],['{{cliente.email}}','Cliente — E-mail'],['{{cliente.endereco}}','Cliente — Endereço'],['{{equipamento.nome}}','Equipamento — Nome'],['{{equipamento.marca}}','Equipamento — Marca'],['{{equipamento.modelo}}','Equipamento — Modelo'],['{{equipamento.numeroSerie}}','Equipamento — Número de série'],['{{equipamento.serie}}','Equipamento — Série'],['{{financeiro.subtotal}}','Financeiro — Subtotal'],['{{financeiro.desconto}}','Financeiro — Desconto'],['{{financeiro.total}}','Financeiro — Total'],['{{pagina.numero}}','Sistema — Página atual'],['{{pagina.total}}','Sistema — Total de páginas'],['{{sistema.dataGeracao}}','Sistema — Data de geração']
   ];
   const FIELD_DEFS=[
-    ['clientField','Cliente','client-selector',24,24,560,86,280,72,false,true],
-    ['equipmentField','Equipamento','equipment-selector',600,24,560,86,250,72,false,true],
-    ['openedAtField','Data de abertura','date',24,126,260,76,160,68,false,true],
-    ['completedAtField','Data de conclusão','date',300,126,260,76,160,68,false,false],
-    ['statusField','Status operacional','select',576,126,280,76,180,68,false,true],
-    ['brandModelField','Marca / Modelo','text',872,126,288,76,200,68,false,false],
-    ['serialNumberField','Número de série','text',24,218,260,76,180,68,false,false],
-    ['accessPasswordField','Senha de acesso','text',300,218,260,76,180,68,false,false],
-    ['accessoriesField','Acessórios deixados','text',576,218,584,76,240,68,false,false],
-    ['reportedIssueField','Defeito relatado','textarea',24,316,560,150,300,110,true,true],
-    ['technicalReportField','Laudo técnico','textarea',600,316,560,150,300,110,true,false],
-    ['clientNotesField','Observações para o cliente','textarea',24,482,560,130,300,100,true,false],
-    ['internalNotesField','Observação interna','textarea',600,482,560,130,300,100,true,false],
+    ['clientField','Cliente','client-selector',24,24,560,66,280,50,false,true],
+    ['equipmentField','Equipamento','equipment-selector',600,24,560,66,250,50,false,true],
+    ['openedAtField','Data de abertura','date',24,126,260,56,160,46,false,true],
+    ['completedAtField','Data de conclusão','date',300,126,260,56,160,46,false,false],
+    ['statusField','Status operacional','select',576,126,280,56,180,46,false,true],
+    ['brandModelField','Marca / Modelo','text',872,126,288,56,200,46,false,false],
+    ['serialNumberField','Número de série','text',24,218,260,56,180,46,false,false],
+    ['accessPasswordField','Senha de acesso','text',300,218,260,56,180,46,false,false],
+    ['accessoriesField','Acessórios deixados','text',576,218,584,56,240,46,false,false],
+    ['reportedIssueField','Defeito relatado','textarea',24,316,560,108,300,76,true,true],
+    ['technicalReportField','Laudo técnico','textarea',600,316,560,108,300,76,true,false],
+    ['clientNotesField','Observações para o cliente','textarea',24,482,560,98,300,72,true,false],
+    ['internalNotesField','Observação interna','textarea',600,482,560,98,300,72,true,false],
     ['itemsField','Itens e Serviços','dynamic-section',24,634,1136,390,480,240,true,true],
     ['paymentsField','Pagamentos','dynamic-section',24,1046,1136,310,480,220,true,false],
     ['photosField','Fotos','media-section',24,1378,1136,310,300,220,true,false],
     ['actionButtons','Ações finais','actions',24,1710,1136,152,420,120,true,true]
   ];
   const CLIENT_FIELD_DEFS=[
-    ['identifier','Identificador do cliente','identifier',16,16,1168,72,220,64,true,true],
-    ['name','Nome','text',16,104,1168,82,220,64,true,true],
-    ['phone','Telefone','tel',16,202,568,82,180,64,true,false],
-    ['document','CPF/CNPJ','text',600,202,584,82,180,64,true,false],
-    ['address','Rua / Endereço','text',16,300,760,82,240,64,true,false],
-    ['zip','CEP','text',792,300,392,82,160,64,true,false],
+    ['identifier','Identificador do cliente','identifier',16,16,1168,58,220,46,true,true],
+    ['name','Nome','text',16,104,1168,60,220,48,true,true],
+    ['phone','Telefone','tel',16,202,568,60,180,48,true,false],
+    ['document','CPF/CNPJ','text',600,202,584,60,180,48,true,false],
+    ['address','Rua / Endereço','text',16,300,760,60,240,48,true,false],
+    ['zip','CEP','text',792,300,392,60,160,48,true,false],
     ['addressTools','Busca de endereço e resultados','dynamic-section',16,398,1168,118,300,88,true,false],
-    ['number','Número','text',16,532,240,82,140,64,true,false],
-    ['city','Cidade','text',272,532,456,82,180,64,true,false],
-    ['state','Estado','select',744,532,184,82,120,64,true,false],
-    ['neighborhood','Bairro','text',944,532,240,82,160,64,true,false],
-    ['complement','Complemento','text',16,630,568,82,180,64,true,false],
-    ['notes','Observação interna','textarea',600,630,584,132,260,92,true,false],
-    ['actions','Ações do formulário','actions',16,778,1168,92,360,72,true,true]
+    ['number','Número','text',16,532,240,60,140,48,true,false],
+    ['city','Cidade','text',272,532,456,60,180,48,true,false],
+    ['state','Estado','select',744,532,184,60,120,48,true,false],
+    ['neighborhood','Bairro','text',944,532,240,60,160,48,true,false],
+    ['complement','Complemento','text',16,630,568,60,180,48,true,false],
+    ['notes','Observação interna','textarea',600,630,584,102,260,72,true,false],
+    ['actions','Ações do formulário','actions',16,778,1168,72,360,58,true,true]
   ];
   const CLIENT_NODE_SELECTORS={identifier:'.osv-code-preview',name:'.client-name',phone:'[name="phone"]',document:'[name="document"]',address:'[name="address"]',zip:'[name="zip"]',addressTools:'.cep-helper',number:'[name="number"]',city:'.city-large',state:'.state-small',neighborhood:'[name="neighborhood"]',complement:'[name="complement"]',notes:'[name="notes"]',actions:'.form-actions'};
   const PDF_COMPONENT_LIBRARY={
@@ -445,7 +445,8 @@
     Object.entries(nodes).forEach(([id,node])=>{if(!node)return;node.dataset.osvComponent=id;if(id!=='actionButtons')surface.appendChild(node);});
     if(nodes.actionButtons)surface.after(nodes.actionButtons);
     form.querySelectorAll(':scope > .form-grid').forEach(g=>{if(!g.children.length)g.remove();});
-    applyOrderLayout221(form);
+    if(window.MarcoV256?.decorateModal)requestAnimationFrame(()=>window.MarcoV256.decorateModal());
+    else applyOrderLayout221(form);
   }
 
   function watchOrderForm221(){
@@ -481,7 +482,7 @@
     const rows=[];sorted.forEach(item=>{let row=rows.find(r=>Math.abs(r.sourceY-item.p.y)<=14);if(!row){row={sourceY:item.p.y,items:[]};rows.push(row);}row.items.push(item);});rows.sort((a,b)=>a.sourceY-b.sourceY);
     let cursor=16,previousSource=0,previousDeclared=0;rows.forEach((row,index)=>{const sourceGap=index?Math.max(12,row.sourceY-previousSource-previousDeclared):Math.max(0,row.sourceY-16);cursor+=sourceGap;let rowHeight=0;row.items.forEach(item=>{item.el.style.top=`${cursor}px`;item.el.style.left=`${(item.p.x/canvasWidth)*100}%`;item.el.style.width=`${(item.p.width/canvasWidth)*100}%`;rowHeight=Math.max(rowHeight,item.el.scrollHeight,item.el.offsetHeight,item.p.height||0);});previousSource=row.sourceY;previousDeclared=Math.max(...row.items.map(x=>x.p.height||0));cursor+=rowHeight;});surface.style.height=`${Math.max(260,cursor+24)}px`;
   }
-  function applyOrderLayout221(form){applyVisualSurfaceLayout221(form?.querySelector('[data-layout-surface="order"]'),settings().osvLayout||defaultOrderLayout(),'data-osv-component','order');}
+  function applyOrderLayout221(form){if(window.MarcoV256){const modal=form?.closest('.modal');const surface=form?.querySelector('[data-layout-surface="order"]');if(surface&&!surface.dataset.layoutGridV256)window.MarcoV256.decorateModal?.();else window.MarcoV256.refreshModalGrid?.(modal,false);return;}applyVisualSurfaceLayout221(form?.querySelector('[data-layout-surface="order"]'),settings().osvLayout||defaultOrderLayout(),'data-osv-component','order');}
   function applyClientLayout221(form=document.querySelector('#modal-root form[data-form="client"]')){applyVisualSurfaceLayout221(form?.querySelector('[data-layout-surface="client"]'),settings().clientFormLayout||defaultClientLayout(),'data-client-component','client');}
 
 

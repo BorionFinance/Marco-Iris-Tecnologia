@@ -1,0 +1,35 @@
+{
+  "allPassed": true,
+  "total": 316,
+  "passed": 316,
+  "failures": [],
+  "suites": [
+    {
+      "name": "Ajuste compacto estático",
+      "checks": 10,
+      "passed": 10
+    },
+    {
+      "name": "Grade livre e faturamento hierárquico",
+      "checks": 47,
+      "passed": 47
+    },
+    {
+      "name": "Regressão de layout em 20 ciclos",
+      "checks": 220,
+      "passed": 220
+    },
+    {
+      "name": "Navegação ampla e mobile em 1 ciclo pós-ajuste",
+      "checks": 39,
+      "passed": 39
+    }
+  ],
+  "requestedChange": {
+    "visibleArrasteLabelsRemoved": true,
+    "topPaddingCompacted": true,
+    "simpleDefaultRows": 4,
+    "resizeHandlePreserved": true,
+    "layoutSavePreserved": true
+  }
+}

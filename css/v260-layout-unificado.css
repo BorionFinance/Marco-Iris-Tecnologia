@@ -1,0 +1,139 @@
+/* Marco Iris Tecnologia v2.6.2 — grade livre e persistente em todos os editores. */
+
+/* A mesma geometria da Visão Geral é aplicada aos formulários e detalhes. */
+#modal-root .modal [data-layout-grid-v256].layout-grid-v256{
+  position:relative!important;
+  display:grid!important;
+  grid-template-columns:repeat(12,minmax(0,1fr))!important;
+  grid-template-rows:repeat(var(--layout-grid-rows-v260,1),22px)!important;
+  grid-auto-flow:row!important;
+  grid-auto-rows:22px!important;
+  column-gap:12px!important;
+  row-gap:4px!important;
+  align-items:stretch!important;
+  width:100%!important;
+  min-width:0!important;
+  min-height:calc(var(--layout-grid-rows-v260,1) * 22px)!important;
+  height:auto!important;
+  overflow:hidden!important;
+  padding:8px!important;
+  margin:10px 0!important;
+  box-sizing:border-box!important;
+}
+#modal-root .modal [data-layout-grid-v256] > [data-layout-item-v256]{
+  position:relative!important;
+  left:auto!important;
+  top:auto!important;
+  right:auto!important;
+  bottom:auto!important;
+  grid-column:var(--layout-x-v260,1) / span min(var(--layout-span-v256,6),12)!important;
+  grid-row:var(--layout-y-v260,1) / span var(--layout-rows-v256,8)!important;
+  order:0!important;
+  width:auto!important;
+  min-width:0!important;
+  min-height:0!important;
+  height:auto!important;
+  max-height:none!important;
+  margin:0!important;
+  box-sizing:border-box!important;
+  overflow:hidden!important;
+  overscroll-behavior:contain!important;
+}
+#modal-root .modal.layout-editing-v256 [data-layout-grid-v256].layout-grid-v256{
+  min-height:calc(max(var(--layout-grid-rows-v260,42),42) * 22px)!important;
+  outline:2px dashed rgba(82,165,255,.62)!important;
+  outline-offset:4px!important;
+  border-radius:15px!important;
+  background-color:rgba(4,29,58,.26)!important;
+  background-image:
+    linear-gradient(rgba(97,174,255,.105) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(97,174,255,.105) 1px,transparent 1px)!important;
+  background-size:calc((100% - 132px)/12 + 12px) 28px!important;
+  background-position:12px 12px!important;
+}
+#modal-root .modal.layout-editing-v256 [data-layout-item-v256]{
+  padding:4px 6px 6px!important;
+  border:1px dashed rgba(126,184,242,.48)!important;
+  border-radius:12px!important;
+  background:rgba(8,35,66,.88)!important;
+  box-shadow:0 8px 22px rgba(0,10,28,.16)!important;
+  cursor:grab!important;
+}
+#modal-root .modal.layout-editing-v256 [data-layout-item-v256]::before{
+  content:none!important;
+  display:none!important;
+}
+#modal-root .modal.layout-editing-v256 [data-layout-item-v256].is-dragging-v260{
+  opacity:.48!important;
+  cursor:grabbing!important;
+}
+#modal-root .modal.layout-editing-v256 [data-layout-item-v256].layout-field-v259,
+#modal-root .modal.layout-editing-v256 [data-layout-item-v256].layout-check-v259{
+  overflow:hidden!important;
+}
+#modal-root .modal.layout-editing-v256 [data-layout-item-v256].layout-section-v259{
+  overflow:auto!important;
+}
+.layout-drop-preview-v260{
+  grid-column:var(--layout-preview-x-v260,1) / span var(--layout-preview-span-v260,6)!important;
+  grid-row:var(--layout-preview-y-v260,1) / span var(--layout-preview-rows-v260,8)!important;
+  z-index:50!important;
+  min-width:0!important;
+  min-height:0!important;
+  border:2px dashed rgba(102,210,160,.98)!important;
+  border-radius:13px!important;
+  background:rgba(52,176,124,.17)!important;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)!important;
+  pointer-events:none!important;
+}
+.layout-drop-preview-v260.is-invalid{
+  border-color:rgba(255,119,119,.98)!important;
+  background:rgba(214,63,76,.18)!important;
+}
+#modal-root .modal.layout-editing-v256 .layout-toolbar-v256{
+  flex:1 1 520px!important;
+}
+#modal-root .modal.layout-editing-v256 .layout-toolbar-v256 small{
+  max-width:none!important;
+}
+
+/* Faturamento hierárquico e controles de rolagem maiores. */
+.revenue-period-tabs-v255{order:0;display:flex!important;gap:7px!important;flex-wrap:wrap!important}
+.revenue-period-tabs-v255 button{min-width:68px!important;min-height:38px!important;font-weight:800!important}
+.revenue-filter-context-v260{margin-top:-8px;color:var(--muted,#9eb7cf);font-size:.76rem;font-weight:700}
+.revenue-chart-v255{
+  scrollbar-width:auto!important;
+  scrollbar-color:rgba(89,169,255,.72) rgba(3,26,53,.72)!important;
+  padding-bottom:5px!important;
+}
+.revenue-chart-v255::-webkit-scrollbar{height:15px!important}
+.revenue-chart-v255::-webkit-scrollbar-track{background:rgba(3,26,53,.72)!important;border-radius:999px!important}
+.revenue-chart-v255::-webkit-scrollbar-thumb{background:rgba(89,169,255,.72)!important;border:3px solid rgba(3,26,53,.72)!important;border-radius:999px!important}
+.revenue-scroll-controls-v260{display:flex;justify-content:flex-end;gap:8px;margin-top:-8px}
+.revenue-scroll-controls-v260 button{
+  width:48px!important;height:40px!important;min-width:48px!important;min-height:40px!important;
+  display:grid!important;place-items:center!important;border:1px solid var(--border,#28507a)!important;
+  border-radius:11px!important;background:rgba(11,47,85,.9)!important;color:#dceeff!important;cursor:pointer!important;
+}
+.revenue-scroll-controls-v260 button:hover{background:rgba(26,91,154,.95)!important;border-color:#4ca3ff!important}
+.revenue-scroll-controls-v260 svg{width:24px!important;height:24px!important;stroke-width:2.4!important}
+
+@media (max-width:900px){
+  #modal-root .modal [data-layout-grid-v256].layout-grid-v256{
+    display:grid!important;
+    grid-template-columns:1fr!important;
+    grid-template-rows:none!important;
+    grid-auto-rows:auto!important;
+    min-height:0!important;
+    padding:8px!important;
+    background-image:none!important;
+  }
+  #modal-root .modal [data-layout-grid-v256] > [data-layout-item-v256]{
+    grid-column:1/-1!important;
+    grid-row:auto!important;
+    min-height:118px!important;
+    overflow:visible!important;
+  }
+  #modal-root .modal.layout-editing-v256 [data-layout-grid-v256].layout-grid-v256{min-height:0!important}
+  .revenue-scroll-controls-v260{justify-content:center}
+}

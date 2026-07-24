@@ -1,0 +1,12 @@
+{
+  "version": "2.6.2",
+  "fix": "salvamento de altura compacta nos editores de layout",
+  "cause": "a captura e a reaplicacao do layout elevavam silenciosamente qualquer bloco abaixo de 4 linhas para 4 linhas",
+  "correction": "o limite de captura e reaplicacao foi alinhado ao redimensionador, permitindo e preservando 2 linhas",
+  "scope": [
+    "Nova OSV",
+    "editores unificados de formularios",
+    "visualizacoes com layout editavel"
+  ],
+  "unrelated_features_changed": false
+}

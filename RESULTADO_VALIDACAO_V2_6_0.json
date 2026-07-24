@@ -1,0 +1,243 @@
+{
+  "allPassed": true,
+  "passed": 47,
+  "total": 47,
+  "failures": [],
+  "checks": [
+    {
+      "name": "Camadas v2.6.0 carregadas",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Botões na ordem Ano, Mês, Dia",
+      "ok": true,
+      "detail": "[\"Ano\",\"Mês\",\"Dia\"]"
+    },
+    {
+      "name": "Ano exibe 2024, 2025 e 2026",
+      "ok": true,
+      "detail": "[\"2024\",\"2025\",\"2026\"]"
+    },
+    {
+      "name": "Mês herda o ano 2025",
+      "ok": true,
+      "detail": "[\"2025-01\",\"2025-02\",\"2025-03\",\"2025-04\",\"2025-05\",\"2025-06\",\"2025-07\",\"2025-08\",\"2025-09\",\"2025-10\",\"2025-11\",\"2025-12\"]"
+    },
+    {
+      "name": "Dia herda fevereiro de 2025",
+      "ok": true,
+      "detail": "28:2025-02-01:2025-02-28"
+    },
+    {
+      "name": "Títulos sem datas",
+      "ok": true,
+      "detail": "[\"Composição financeira\",\"Formas de pagamento\"]"
+    },
+    {
+      "name": "Setas grandes abaixo do gráfico",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Editar lançamento financeiro possui Editar layout",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Editar lançamento financeiro abre grade visível",
+      "ok": true,
+      "detail": "1/14"
+    },
+    {
+      "name": "Editar lançamento financeiro usa coordenadas x/y",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Salvar grava x/y/tamanho no estado",
+      "ok": true,
+      "detail": "{\"order\":4807,\"x\":7,\"y\":48,\"span\":5,\"rows\":9}"
+    },
+    {
+      "name": "Layout salvo reaparece ao reabrir",
+      "ok": true,
+      "detail": "7/48"
+    },
+    {
+      "name": "Novo cliente possui Editar layout",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Novo cliente abre grade visível",
+      "ok": true,
+      "detail": "1/12"
+    },
+    {
+      "name": "Novo cliente usa coordenadas x/y",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Nova OSV possui Editar layout",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Nova OSV abre grade visível",
+      "ok": true,
+      "detail": "1/16"
+    },
+    {
+      "name": "Nova OSV usa coordenadas x/y",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Salvar layout da Nova OSV grava coordenadas",
+      "ok": true,
+      "detail": "{\"order\":7008,\"x\":8,\"y\":70,\"span\":5,\"rows\":4}"
+    },
+    {
+      "name": "Layout da Nova OSV salvo reaparece",
+      "ok": true,
+      "detail": "8/70"
+    },
+    {
+      "name": "Visualização da OSV possui Editar layout",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Visualização da OSV abre grade visível",
+      "ok": true,
+      "detail": "1/7"
+    },
+    {
+      "name": "Visualização da OSV usa coordenadas x/y",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Visualização do cliente possui Editar layout",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Visualização do cliente abre grade visível",
+      "ok": true,
+      "detail": "1/2"
+    },
+    {
+      "name": "Visualização do cliente usa coordenadas x/y",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Novo agendamento possui Editar layout",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Novo agendamento abre grade visível",
+      "ok": true,
+      "detail": "1/7"
+    },
+    {
+      "name": "Novo agendamento usa coordenadas x/y",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Novo produto possui Editar layout",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Novo produto abre grade visível",
+      "ok": true,
+      "detail": "1/10"
+    },
+    {
+      "name": "Novo produto usa coordenadas x/y",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Novo serviço possui Editar layout",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Novo serviço abre grade visível",
+      "ok": true,
+      "detail": "1/3"
+    },
+    {
+      "name": "Novo serviço usa coordenadas x/y",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Novo insumo possui Editar layout",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Novo insumo abre grade visível",
+      "ok": true,
+      "detail": "1/7"
+    },
+    {
+      "name": "Novo insumo usa coordenadas x/y",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Nova movimentação de estoque possui Editar layout",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Nova movimentação de estoque abre grade visível",
+      "ok": true,
+      "detail": "1/7"
+    },
+    {
+      "name": "Nova movimentação de estoque usa coordenadas x/y",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Novo termo possui Editar layout",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Novo termo abre grade visível",
+      "ok": true,
+      "detail": "1/8"
+    },
+    {
+      "name": "Novo termo usa coordenadas x/y",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Dados da empresa possui Editar layout",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Dados da empresa abre grade visível",
+      "ok": true,
+      "detail": "1/11"
+    },
+    {
+      "name": "Dados da empresa usa coordenadas x/y",
+      "ok": true,
+      "detail": ""
+    }
+  ]
+}
