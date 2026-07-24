@@ -1,11 +1,11 @@
 'use strict';
 
-/* Marco Iris Tecnologia v2.6.4 — ajustes finais solicitados após a migração.
+/* Marco Iris Tecnologia v2.6.5 — ajustes finais solicitados após a migração.
  * Esta camada é carregada por último para preservar a base histórica e substituir
  * somente apresentação, filtros, cliques e personalização visual.
  */
 (() => {
-  const VERSION='2.6.4';
+  const VERSION='2.6.5';
   const ORDER_STATUSES=['Orçamento','Em andamento','Aguardando peça','Concluída','Cancelada'];
   const INTERACTIVE_SELECTOR='button,a,input,select,textarea,label,summary,details,[role="button"],[contenteditable="true"]';
   const ENTITY_EDIT_ACTION={service:'edit-service',product:'edit-product',supply:'edit-supply',movement:'edit-stock-movement'};
@@ -100,6 +100,15 @@
         }
       }
       s.migrations.layoutNormalDefaultsV263={version:VERSION,appliedAt:new Date().toISOString()};
+    }
+    // v2.6.5: corrige somente o editor do Novo/Editar lançamento.
+    // Layouts antigos desse formulário podiam guardar coordenadas quebradas; os demais editores não são tocados.
+    if(!s.migrations.paymentLayoutRepairV265){
+      const layouts=s.unifiedLayoutsV256||{};
+      for(const band of ['desktop','tablet','mobile']){
+        if(layouts[band]&&Object.prototype.hasOwnProperty.call(layouts[band],'form:payment'))delete layouts[band]['form:payment'];
+      }
+      s.migrations.paymentLayoutRepairV265={version:VERSION,appliedAt:new Date().toISOString()};
     }
     if(!s.migrations.revenueExpandedV257){
       for(const band of ['desktop','tablet','mobile']){
@@ -366,6 +375,27 @@
     }
     return [...body.querySelectorAll('.detail-grid-v256')];
   }
+  function paymentDefaultRect256(id,index=0){
+    const map={
+      paymentId:{x:1,y:1,span:6,rows:4},
+      type:{x:7,y:1,span:6,rows:4},
+      orderId:{x:1,y:5,span:12,rows:4},
+      value:{x:1,y:9,span:6,rows:4},
+      paymentMethod:{x:7,y:9,span:6,rows:4},
+      paymentDate:{x:1,y:13,span:6,rows:4},
+      planned:{x:7,y:13,span:6,rows:4},
+      settlementState:{x:1,y:17,span:6,rows:4},
+      expenseName:{x:7,y:17,span:6,rows:4},
+      localPurchase:{x:1,y:21,span:6,rows:4},
+      expenseCategory:{x:7,y:21,span:6,rows:4},
+      notes:{x:1,y:25,span:12,rows:8},
+      dueDate:{x:1,y:33,span:6,rows:4},
+      fee:{x:7,y:33,span:6,rows:4},
+      cancelled:{x:1,y:37,span:12,rows:4}
+    };
+    const rect=map[id];
+    return rect?{...rect,order:rect.y*100+rect.x}:null;
+  }
   function prepareModalItems256(modal,key,{applySaved=true,forceDefaults=false}={}){
     const store=layoutStore256(key),grids=[];
     const form=modal.querySelector('form[data-form]');
@@ -403,10 +433,11 @@
           const saved=!forceDefaults&&applySaved?gridStore[id]:null;
           const preserveCurrent=!applySaved&&!forceDefaults&&!!item.style.getPropertyValue('--layout-x-v260');
           const current=preserveCurrent?modalItemRect256(item,index):null;
-          const span=Math.max(2,Math.min(12,Number(saved?.span)||Number(current?.span)||modalDefaultSpan256(item,key,grid)));
-          const rows=Math.max(2,Math.min(60,Number(saved?.rows)||Number(current?.rows)||modalDefaultRows256(item)));
-          let x=Number(saved?.x)||Number(current?.x)||0,y=Number(saved?.y)||Number(current?.y)||0;
-          const proposed={id,x,y,span,rows,order:Number.isFinite(Number(saved?.order))?Number(saved.order):Number.isFinite(Number(current?.order))?Number(current.order):index};
+          const paymentDefault=key==='form:payment'&&!saved&&!current?paymentDefaultRect256(id,index):null;
+          const span=Math.max(2,Math.min(12,Number(saved?.span)||Number(current?.span)||Number(paymentDefault?.span)||modalDefaultSpan256(item,key,grid)));
+          const rows=Math.max(2,Math.min(60,Number(saved?.rows)||Number(current?.rows)||Number(paymentDefault?.rows)||modalDefaultRows256(item)));
+          let x=Number(saved?.x)||Number(current?.x)||Number(paymentDefault?.x)||0,y=Number(saved?.y)||Number(current?.y)||Number(paymentDefault?.y)||0;
+          const proposed={id,x,y,span,rows,order:Number.isFinite(Number(saved?.order))?Number(saved.order):Number.isFinite(Number(current?.order))?Number(current.order):Number.isFinite(Number(paymentDefault?.order))?Number(paymentDefault.order):index};
           if(!x||!y||!modalCanPlace256(proposed,placed,id))({x,y}=modalFirstFree256(span,rows,placed));
           const rect={...proposed,x,y};applyModalRect256(item,rect);placed.push(rect);
         });

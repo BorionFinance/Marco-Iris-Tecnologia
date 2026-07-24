@@ -1,8 +1,8 @@
 'use strict';
 
-/* Marco Iris Tecnologia v2.6.4 — coordenadas livres e correções estruturais. */
+/* Marco Iris Tecnologia v2.6.5 — coordenadas livres e correções estruturais. */
 (() => {
-  const VERSION='2.6.4';
+  const VERSION='2.6.5';
   const GRID_COLUMNS=12;
   const GRID_ROW=22;
   const GRID_ROW_GAP=4;
