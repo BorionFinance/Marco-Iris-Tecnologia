@@ -165,7 +165,7 @@ form[data-layout-key-v256] .layout-grid-v256>[data-layout-item-v256].has-custom-
 .layout-editing-v256 [data-layout-item-v256].layout-section-v259{overflow:auto!important}
 
 
-/* v2.6.5 — somente no editor do Novo/Editar lançamento, exibir todos os campos configuráveis. */
+/* v2.6.6 — somente no editor do Novo/Editar lançamento, exibir todos os campos configuráveis. */
 .layout-editing-v256 form[data-form="payment"] .payment-due.is-hidden,
 .layout-editing-v256 form[data-form="payment"] .payment-fee.is-hidden{
   display:block!important;

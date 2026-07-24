@@ -30,6 +30,9 @@ let BACKGROUND_SAVE_COMPLETED=0;
 let BACKGROUND_SAVE_PROMISE=null;
 let BACKGROUND_SAVE_OPTIONS={};
 let BACKGROUND_SAVE_WAITERS=[];
+let BACKGROUND_SAVE_RETRY_TIMER=null;
+let CLOUD_WRITE_CHAIN=Promise.resolve();
+const PENDING_PAYMENT_DELETIONS=new Map();
 
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -99,9 +102,35 @@ function normalizeState(){
   d.serviceOrders.forEach(o=>{o.registrationStatus=o.registrationStatus||'Ativo';o.photos=Array.isArray(o.photos)?o.photos:[];o.pdfs=Array.isArray(o.pdfs)?o.pdfs:[];o.attachments=Array.isArray(o.attachments)?o.attachments:[];});
   d.appointments.forEach(a=>{a.status=a.status||'Agendado';a.orderId=a.orderId||'';});
   d.consents.forEach(c=>{c.status=c.status||(c.accepted?'Aceito':'Pendente');c.accepted=!!c.accepted;});
+  applyPendingPaymentDeletions(STATE);
   STATE.updatedAt=STATE.updatedAt||nowIso();
 }
 function addAudit(action,detail=''){data().audit.unshift({id:`audit_${Date.now()}_${Math.random().toString(36).slice(2,7)}`,date:nowIso(),action,detail});data().audit=data().audit.slice(0,300);}
+function pendingPaymentDeletionKey(profileId,id){return `${String(profileId||'')}::${String(id||'')}`;}
+function markPendingPaymentDeletion(profileId,id){
+  const key=pendingPaymentDeletionKey(profileId,id);
+  if(!profileId||!id)return '';
+  PENDING_PAYMENT_DELETIONS.set(key,{profileId:String(profileId),id:String(id),queuedAt:nowIso()});
+  return key;
+}
+function applyPendingPaymentDeletions(targetState=STATE){
+  if(!targetState||!PENDING_PAYMENT_DELETIONS.size)return targetState;
+  for(const pending of PENDING_PAYMENT_DELETIONS.values()){
+    const profileData=targetState?.dataByProfile?.[pending.profileId];
+    if(profileData&&Array.isArray(profileData.payments))profileData.payments=profileData.payments.filter(item=>String(item?.id)!==pending.id&&String(item?.code)!==pending.id);
+  }
+  return targetState;
+}
+function confirmPendingPaymentDeletions(savedState){
+  if(!savedState||!PENDING_PAYMENT_DELETIONS.size)return 0;
+  let confirmed=0;
+  for(const [key,pending] of [...PENDING_PAYMENT_DELETIONS.entries()]){
+    const payments=savedState?.dataByProfile?.[pending.profileId]?.payments||[];
+    const stillPresent=payments.some(item=>String(item?.id)===pending.id||String(item?.code)===pending.id);
+    if(!stillPresent){PENDING_PAYMENT_DELETIONS.delete(key);confirmed++;}
+  }
+  return confirmed;
+}
 function cloudReason(action=''){return String(action||'alteracao').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9_-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,80)||'alteracao';}
 async function publishBridgeConfirmed(stateSnapshot=STATE){
   if(!window.MarcoBorionInterop?.publish)return {skipped:true};
@@ -115,8 +144,9 @@ async function publishBridgeConfirmed(stateSnapshot=STATE){
 async function flushCloudState(reason='alteracao',{backup=false,retryMedia=true,stateSnapshot=null}={}){
   if(!navigator.onLine)throw new Error('Internet obrigatória. A alteração não foi salva.');
   if(!window.GoogleDriveMarco?.isConfigured?.())throw new Error('Google Drive desconectado. Entre novamente antes de alterar dados.');
+  applyPendingPaymentDeletions(STATE);
   if(retryMedia)await syncPendingMedia();
-  const committedState=stateSnapshot?clone(stateSnapshot):clone(STATE);
+  const committedState=stateSnapshot?applyPendingPaymentDeletions(clone(stateSnapshot)):clone(STATE);
   window.MarcoBorionInterop?.prepareState?.(committedState);
   let baseCommitted=false;
   try{
@@ -162,8 +192,25 @@ function settleBackgroundSaveWaiters(target,result,error){
   }
   BACKGROUND_SAVE_WAITERS=keep;
 }
+function serializeCloudWrite(task){
+  /* Google Drive já serializa o arquivo principal, mas a confirmação do bridge e a
+     atualização de LAST_CONFIRMED_STATE acontecem fora daquela fila. Esta corrente
+     única mantém exclusões e edições consecutivas na mesma ordem do usuário. */
+  const run=CLOUD_WRITE_CHAIN.catch(()=>null).then(()=>task());
+  CLOUD_WRITE_CHAIN=run.catch(()=>null);
+  return run;
+}
+function scheduleBackgroundSaveRetry(){
+  clearTimeout(BACKGROUND_SAVE_RETRY_TIMER);
+  BACKGROUND_SAVE_RETRY_TIMER=setTimeout(()=>{
+    BACKGROUND_SAVE_RETRY_TIMER=null;
+    if(BACKGROUND_SAVE_COMPLETED<BACKGROUND_SAVE_REQUESTED)runBackgroundSaveQueue().catch(error=>console.warn('[BACKGROUND_SAVE_RETRY]',error));
+  },5000);
+}
 async function runBackgroundSaveQueue(){
   if(BACKGROUND_SAVE_PROMISE)return await BACKGROUND_SAVE_PROMISE;
+  clearTimeout(BACKGROUND_SAVE_RETRY_TIMER);
+  BACKGROUND_SAVE_RETRY_TIMER=null;
   BACKGROUND_SAVE_PROMISE=(async()=>{
     let lastResult={local:true,folder:false,drive:false,bridge:false,errors:[]};
     while(BACKGROUND_SAVE_COMPLETED<BACKGROUND_SAVE_REQUESTED){
@@ -171,42 +218,79 @@ async function runBackgroundSaveQueue(){
       const opts=BACKGROUND_SAVE_OPTIONS;
       BACKGROUND_SAVE_OPTIONS={};
       const result={local:true,folder:false,drive:false,bridge:false,errors:[]};
+      let retryBase=false;
       try{
+        applyPendingPaymentDeletions(STATE);
         if(data().settings.autosaveFolder&&opts.folder!==false){
           try{const h=await MarcoStorage.getFolderHandle();if(h&&await MarcoStorage.ensurePermission(h,false)){await MarcoStorage.saveToFolder(STATE,{handle:h});result.folder=true;}}
           catch(error){console.warn('[BACKGROUND_FOLDER]',error);result.errors.push(`Pasta local: ${error.message}`);}
         }
-        if(data().settings.autosaveGoogle&&opts.google!==false&&GoogleDriveMarco.isConfigured()){
-          try{
-            const cloud=await flushCloudState(opts.reason||'alteracao',{backup:!!opts.backup,retryMedia:opts.media!==false});
+        if(data().settings.autosaveGoogle&&opts.google!==false){
+          if(!GoogleDriveMarco.isConfigured()){
+            retryBase=true;
+            result.errors.push('Google Drive: conexão indisponível.');
+          }else try{
+            const cloud=await serializeCloudWrite(()=>flushCloudState(opts.reason||'alteracao',{backup:!!opts.backup,retryMedia:opts.media!==false}));
             result.drive=!!cloud?.saved;
             result.bridge=!!cloud?.bridge&&!cloud.bridge.skipped;
+            const confirmedSnapshot=cloud?.stateSnapshot||STATE;
+            LAST_CONFIRMED_STATE=clone(confirmedSnapshot);
+            await MarcoStorage.saveSyncBase?.(confirmedSnapshot);
+            confirmPendingPaymentDeletions(confirmedSnapshot);
             clearTimeout(CLOUD_RETRY_TIMER);
           }catch(error){
-            console.warn('[BACKGROUND_CLOUD]',error);result.errors.push(`Google Drive/integração: ${error.message}`);scheduleCloudRetry(opts.reason||'alteracao');
+            console.warn('[BACKGROUND_CLOUD]',error);
+            if(error?.baseCommitted){
+              result.drive=true;
+              const confirmedSnapshot=error.stateSnapshot||STATE;
+              LAST_CONFIRMED_STATE=clone(confirmedSnapshot);
+              await MarcoStorage.saveSyncBase?.(confirmedSnapshot);
+              confirmPendingPaymentDeletions(confirmedSnapshot);
+              result.errors.push(`Integração Borion: ${error.message}`);
+              scheduleCloudRetry(opts.reason||'alteracao');
+            }else{
+              retryBase=true;
+              result.errors.push(`Google Drive: ${error.message}`);
+            }
           }
         }
-        if(result.errors.length)setSaveStatus('Google Drive pendente · nova tentativa em 5 s','warn');
+        if(retryBase){
+          BACKGROUND_SAVE_OPTIONS=mergeBackgroundSaveOptions(BACKGROUND_SAVE_OPTIONS,opts);
+          CLOUD_PENDING_LOCAL=true;
+          setSaveStatus('Alteração mantida na tela · Google Drive pendente, nova tentativa em 5 s','warn');
+          scheduleBackgroundSaveRetry();
+          lastResult=result;
+          break;
+        }
+        if(result.errors.length&&result.drive)setSaveStatus('Dados no Drive · integração com Borion pendente','warn');
+        else if(result.errors.length)setSaveStatus('Google Drive pendente · nova tentativa em 5 s','warn');
         else if(result.bridge)setSaveStatus('Drive + Borion_Integracoes confirmados','ok');
         else if(result.drive)setSaveStatus('Google Drive confirmado','ok');
         else setSaveStatus('Nenhuma alteração pendente no Google Drive','ok');
         BACKGROUND_SAVE_COMPLETED=target;
+        CLOUD_PENDING_LOCAL=BACKGROUND_SAVE_COMPLETED<BACKGROUND_SAVE_REQUESTED;
         lastResult=result;
         settleBackgroundSaveWaiters(target,result,null);
       }catch(error){
-        BACKGROUND_SAVE_COMPLETED=target;
-        settleBackgroundSaveWaiters(target,null,error);
-        throw error;
+        console.warn('[BACKGROUND_SAVE_QUEUE]',error);
+        BACKGROUND_SAVE_OPTIONS=mergeBackgroundSaveOptions(BACKGROUND_SAVE_OPTIONS,opts);
+        CLOUD_PENDING_LOCAL=true;
+        setSaveStatus('Alteração mantida na tela · nova tentativa em 5 s','warn');
+        scheduleBackgroundSaveRetry();
+        lastResult={...result,errors:[...result.errors,error.message||String(error)]};
+        break;
       }
     }
     return lastResult;
   })().finally(()=>{
     BACKGROUND_SAVE_PROMISE=null;
-    if(BACKGROUND_SAVE_COMPLETED<BACKGROUND_SAVE_REQUESTED)runBackgroundSaveQueue().catch(error=>console.warn('[BACKGROUND_SAVE_QUEUE]',error));
+    if(BACKGROUND_SAVE_COMPLETED<BACKGROUND_SAVE_REQUESTED&&!BACKGROUND_SAVE_RETRY_TIMER)queueMicrotask(()=>runBackgroundSaveQueue().catch(error=>console.warn('[BACKGROUND_SAVE_QUEUE]',error)));
   });
   return await BACKGROUND_SAVE_PROMISE;
 }
 function queueBackgroundSave(opts={}){
+  applyPendingPaymentDeletions(STATE);
+  CLOUD_PENDING_LOCAL=true;
   BACKGROUND_SAVE_OPTIONS=mergeBackgroundSaveOptions(BACKGROUND_SAVE_OPTIONS,{...opts,reason:cloudReason(opts.reason||'alteracao')});
   const seq=++BACKGROUND_SAVE_REQUESTED;
   const promise=new Promise((resolve,reject)=>BACKGROUND_SAVE_WAITERS.push({seq,resolve,reject}));
@@ -214,7 +298,8 @@ function queueBackgroundSave(opts={}){
   return promise;
 }
 async function persist(action='',detail='',opts={}){
-  const confirmedBefore=LAST_CONFIRMED_STATE?clone(LAST_CONFIRMED_STATE):null;
+  applyPendingPaymentDeletions(STATE);
+  const confirmedBefore=LAST_CONFIRMED_STATE?applyPendingPaymentDeletions(clone(LAST_CONFIRMED_STATE)):null;
   const rollback=()=>{
     if(!confirmedBefore)return;
     STATE=clone(confirmedBefore);
@@ -229,9 +314,11 @@ async function persist(action='',detail='',opts={}){
   CLOUD_ONLY_COMMITTING=true;
   setSaveStatus('Enviando alteração ao Google Drive…','warn');
   try{
-    const result=await flushCloudState(action||detail||'alteracao',{backup:!!opts.backup,retryMedia:opts.media!==false});
-    LAST_CONFIRMED_STATE=clone(STATE);
-    await MarcoStorage.saveSyncBase?.(STATE);
+    const result=await serializeCloudWrite(()=>flushCloudState(action||detail||'alteracao',{backup:!!opts.backup,retryMedia:opts.media!==false}));
+    const confirmedSnapshot=result?.stateSnapshot||STATE;
+    LAST_CONFIRMED_STATE=clone(confirmedSnapshot);
+    await MarcoStorage.saveSyncBase?.(confirmedSnapshot);
+    confirmPendingPaymentDeletions(confirmedSnapshot);
     clearTimeout(CLOUD_RETRY_TIMER);
     setSaveStatus(result.bridge&&!result.bridge.skipped?'Drive + Borion_Integracoes confirmados':'Google Drive confirmado','ok');
     return {cloud:true,drive:true,bridge:!!result.bridge&&!result.bridge.skipped,errors:[]};
@@ -239,8 +326,10 @@ async function persist(action='',detail='',opts={}){
     if(error.baseCommitted){
       /* A base principal já está segura no Drive. Mantemos o estado confirmado e
          repetimos somente a publicação do bridge, sem recriar ou perder registros. */
-      LAST_CONFIRMED_STATE=clone(STATE);
-      await MarcoStorage.saveSyncBase?.(STATE);
+      const confirmedSnapshot=error.stateSnapshot||STATE;
+      LAST_CONFIRMED_STATE=clone(confirmedSnapshot);
+      await MarcoStorage.saveSyncBase?.(confirmedSnapshot);
+      confirmPendingPaymentDeletions(confirmedSnapshot);
       CLOUD_PENDING_LOCAL=false;
       setSaveStatus('Dados no Drive · integração com Borion pendente','warn');
       scheduleCloudRetry(action||detail||'alteracao');
@@ -256,7 +345,7 @@ async function persist(action='',detail='',opts={}){
 }
 
 function hasUnsyncedLocalState(){
-  return !!CLOUD_ONLY_COMMITTING;
+  return !!CLOUD_ONLY_COMMITTING||BACKGROUND_SAVE_COMPLETED<BACKGROUND_SAVE_REQUESTED||PENDING_PAYMENT_DELETIONS.size>0;
 }
 async function refreshFromDriveIfNewer({reason='intervalo'}={}){
   if(LOCKED||document.hidden||!STATE||!window.GoogleDriveMarco?.isConfigured?.())return {skipped:true,reason:'indisponivel'};
@@ -710,7 +799,7 @@ function renderLogin(entry=''){
         <div class="lock-feature"><div class="lock-feature-icon">${icon('cloud')}</div><div><strong>Soluções em nuvem</strong><small>Fotos, PDFs, anexos e dados organizados no Google Drive.</small></div></div>
       </div>
     </section>
-    <footer class="lock-footer"><div class="lock-footer-cards"><div class="lock-footer-card"><strong><span class="status-dot-live"></span> Sistema operacional</strong><small>Interface pronta para uso.</small></div><div class="lock-footer-card"><strong>${icon('cloud')} Google Drive e backups</strong><small>Dados e arquivos em pastas separadas.</small></div><div class="lock-footer-card"><strong>${icon('download')} Aplicativo PWA</strong><small>Instalação no computador e celular.</small></div></div><div class="lock-footer-meta"><strong>Marco Iris Tecnologia © 2026</strong><span>v2.6.5</span></div></footer>
+    <footer class="lock-footer"><div class="lock-footer-cards"><div class="lock-footer-card"><strong><span class="status-dot-live"></span> Sistema operacional</strong><small>Interface pronta para uso.</small></div><div class="lock-footer-card"><strong>${icon('cloud')} Google Drive e backups</strong><small>Dados e arquivos em pastas separadas.</small></div><div class="lock-footer-card"><strong>${icon('download')} Aplicativo PWA</strong><small>Instalação no computador e celular.</small></div></div><div class="lock-footer-meta"><strong>Marco Iris Tecnologia © 2026</strong><span>v2.6.6</span></div></footer>
   </main>`;
   startLockNetwork();
 }
@@ -1019,9 +1108,11 @@ async function manualSave(){
     if(!navigator.onLine)throw new Error('Internet obrigatória para salvar.');
     if(!GoogleDriveMarco.isConfigured())throw new Error('Google Drive desconectado.');
     setSaveStatus('Criando backup no Google Drive…','warn');
-    const result=await flushCloudState('backup-manual',{backup:true,retryMedia:true});
-    LAST_CONFIRMED_STATE=clone(STATE);
-    await MarcoStorage.saveSyncBase?.(STATE);
+    const result=await serializeCloudWrite(()=>flushCloudState('backup-manual',{backup:true,retryMedia:true}));
+    const confirmedSnapshot=result?.stateSnapshot||STATE;
+    LAST_CONFIRMED_STATE=clone(confirmedSnapshot);
+    await MarcoStorage.saveSyncBase?.(confirmedSnapshot);
+    confirmPendingPaymentDeletions(confirmedSnapshot);
     const diag=await GoogleDriveMarco.diagnose(STATE);
     if(!diag.ok)throw new Error('A base ou o marco-iris.bridge.json não pôde ser confirmado.');
     setSaveStatus('Backup no Drive + integração confirmados','ok');
@@ -1091,7 +1182,7 @@ async function connectFolder(){
 async function diagnoseDriveInstallation(){
   if(!GoogleDriveMarco.isConfigured())throw new Error('Conecte o Google Drive antes de executar o diagnóstico.');
   setSaveStatus('Testando gravação e leitura da instalação…','warn');
-  await flushCloudState('diagnostico-instalacao',{backup:false,retryMedia:true});
+  await serializeCloudWrite(()=>flushCloudState('diagnostico-instalacao',{backup:false,retryMedia:true}));
   const diag=await GoogleDriveMarco.diagnose(STATE);
   const folders=(diag.folders||[]).map(f=>`<li><strong>${esc(f.name)}</strong><br><small>${esc(f.id)}</small></li>`).join('');
   openModal('Diagnóstico da instalação',`<div class="diagnostic-summary"><p><strong>${diag.ok?'Instalação confirmada':'Instalação incompleta'}</strong></p><p>Conta: ${esc(diag.user?.email||'—')}<br>Base principal: ${diag.mainFile?esc(diag.mainFile.name||'Marco_Iris_Dados.json'):'não encontrada'}<br>Bridge: ${diag.bridgeFile?`${diag.bridgeFile.recordCount} registro(s) · revisão ${diag.bridgeFile.revision}`:'não encontrado'}<br>Instância: ${esc(diag.companyInstanceId||'—')}</p><ul>${folders}</ul></div>`);
@@ -1128,7 +1219,31 @@ async function handleAction(btn){
     if(a==='new-order'){openOrderForm('',{clientId:btn.dataset.client||''});return;}if(a==='edit-order'){openOrderForm(btn.dataset.id);return;}if(a==='view-order'){openOrderDetail(btn.dataset.id);return;}if(a==='delete-order'){await deleteOrder(btn.dataset.id);return;}if(a==='toggle-order-status'){await toggleOrderStatus(btn.dataset.id);return;}if(a==='toggle-archived-orders'){SHOW_ARCHIVED.orders=!SHOW_ARCHIVED.orders;renderView();return;}
     if(a==='new-payment'){openPaymentForm('',btn.dataset.order||'');return;}if(a==='edit-payment'){openPaymentForm(btn.dataset.id);return;}
     if(a==='cancel-payment'){const p=data().payments.find(x=>x.id===btn.dataset.id);if(p&&await confirmAction(`Cancelar a venda ${p.code||p.id}? Ela sairá da lista e, se já estiver no Borion, será removida na próxima sincronização.`,{confirmLabel:'Cancelar venda',tone:'danger'})){await MarcoStorage.createBackup(STATE,'antes-de-cancelar-lancamento');p.status='Cancelado';p.active=false;p.cancelledAt=nowIso();p.updatedAt=nowIso();await persist('Venda cancelada',p.code||p.id,{immediate:true});renderView();toast('Venda cancelada. A remoção no Borion foi programada.');}return;}
-    if(a==='delete-payment'){const p=data().payments.find(x=>x.id===btn.dataset.id);if(p&&await confirmAction(`Excluir definitivamente o lançamento ${p.code||p.id}? Ao contrário de cancelar, ele sai completamente da lista (sem manter histórico) e, se já estiver no Borion, será removido na próxima sincronização.`,{confirmLabel:'Excluir definitivamente',tone:'danger'})){await MarcoStorage.createBackup(STATE,'antes-de-excluir-lancamento');data().payments=data().payments.filter(x=>x.id!==p.id);await persist('Lançamento excluído definitivamente',p.code||p.id,{immediate:true});renderView();toast('Lançamento excluído. A remoção no Borion foi programada.');}return;}
+    if(a==='delete-payment'){
+      const p=data().payments.find(x=>x.id===btn.dataset.id);
+      if(p&&await confirmAction(`Excluir definitivamente o lançamento ${p.code||p.id}? Ao contrário de cancelar, ele sai completamente da lista (sem manter histórico) e, se já estiver no Borion, será removido na próxima sincronização.`,{confirmLabel:'Excluir definitivamente',tone:'danger'})){
+        const profileId=activeProfile().id,recordId=String(p.id),label=p.code||p.id;
+        markPendingPaymentDeletion(profileId,recordId);
+        data().payments=data().payments.filter(x=>String(x.id)!==recordId&&String(x.code)!==recordId);
+        STATE.updatedAt=nowIso();
+        CLOUD_PENDING_LOCAL=true;
+        setSaveStatus('Lançamento removido · salvando no Google Drive em segundo plano…','warn');
+        renderView('none');
+        toast('Lançamento excluído da tela. Salvamento em segundo plano iniciado.');
+        try{window.MarcoBorionInterop?.prepareState?.(STATE);}catch(error){console.warn('[DELETE_PAYMENT_TOMBSTONE]',error);}
+        const driveReady=navigator.onLine&&GoogleDriveMarco?.isConfigured?.();
+        if(!driveReady)addAudit('Lançamento excluído definitivamente',label);
+        const deletionSave=driveReady
+          ?persist('Lançamento excluído definitivamente',label,{backup:true,media:false})
+          :queueBackgroundSave({reason:'lancamento-excluido-definitivamente',backup:true,media:false});
+        Promise.resolve(deletionSave).catch(error=>{
+          console.warn('[DELETE_PAYMENT_BACKGROUND]',error);
+          setSaveStatus('Exclusão mantida na tela · Google Drive pendente','warn');
+          queueBackgroundSave({reason:'lancamento-excluido-definitivamente',backup:true,media:false}).catch(retryError=>console.warn('[DELETE_PAYMENT_RETRY]',retryError));
+        });
+      }
+      return;
+    }
     if(a==='new-appointment'){openAppointmentForm('',{date:btn.dataset.date||AGENDA_SELECTED||today()});return;}
     if(a==='agenda-prev'){AGENDA_CURSOR=monthShift(AGENDA_CURSOR,-1);renderView('left');return;}
     if(a==='agenda-next'){AGENDA_CURSOR=monthShift(AGENDA_CURSOR,1);renderView('right');return;}
@@ -1152,6 +1267,14 @@ async function handleAction(btn){
     if(a==='toggle-privacy'){data().settings.dashboardPrivacy=!data().settings.dashboardPrivacy;await persist('Privacidade do painel alterada','',{folder:false,google:false});renderView();return;}
   }catch(e){console.error(e);setSaveStatus('Ação pendente','warn');toast(e.message||'Não foi possível concluir a ação.','error');}
 }
+
+window.MarcoOptimisticDeleteV266={
+  version:'2.6.6',
+  pendingCount:()=>PENDING_PAYMENT_DELETIONS.size,
+  pendingIds:()=>[...PENDING_PAYMENT_DELETIONS.values()].map(item=>item.id),
+  apply:()=>applyPendingPaymentDeletions(STATE),
+  hasUnsynced:()=>hasUnsyncedLocalState()
+};
 
 async function handleSubmit(form){try{if(form.dataset.form==='login')await submitLogin(form);else if(form.dataset.form==='client')await saveClientForm(form);else if(form.dataset.form==='order')await saveOrderForm(form);else if(form.dataset.form==='payment')await savePaymentForm(form);else if(form.dataset.form==='appointment')await saveAppointmentForm(form);else if(form.dataset.form==='product')await saveProductForm(form);else if(form.dataset.form==='service')await saveServiceForm(form);else if(form.dataset.form==='supply')await saveSupplyForm(form);else if(form.dataset.form==='stock-movement')await saveStockMovement(form);else if(form.dataset.form==='consent')await saveConsentForm(form);else if(form.dataset.form==='company')await saveCompanyForm(form);else if(form.dataset.form==='pin')await savePinForm(form);}catch(e){console.error(e);toast(e.message||'Não foi possível salvar.','error');}}
 
@@ -1229,7 +1352,7 @@ async function boot(){
   if(!navigator.onLine){renderCloudRequired();return;}
   renderLogin();
   if('serviceWorker' in navigator){
-    navigator.serviceWorker.register('./sw.js?v=2.6.5').then(reg=>reg?.update?.()).catch(e=>console.warn('Service worker:',e));
+    navigator.serviceWorker.register('./sw.js?v=2.6.6').then(reg=>reg?.update?.()).catch(e=>console.warn('Service worker:',e));
   }
   window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();window.__installPrompt=e;});
   window.addEventListener('offline',()=>renderCloudRequired('A internet caiu. O aplicativo foi bloqueado para evitar qualquer alteração fora do Google Drive.'));

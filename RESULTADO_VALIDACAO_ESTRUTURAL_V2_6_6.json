@@ -1,0 +1,198 @@
+{
+  "version": "2.6.6",
+  "passed": 38,
+  "total": 38,
+  "allPassed": true,
+  "checks": [
+    {
+      "name": "Arquivo obrigatório: index.html",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Arquivo obrigatório: manifest.json",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Arquivo obrigatório: sw.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Arquivo obrigatório: js/app.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Arquivo obrigatório: js/v255-marco-review.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Arquivo obrigatório: js/services/google-drive.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Arquivo obrigatório: js/services/borion-interop-source.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Sintaxe JavaScript: js/app.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Sintaxe JavaScript: js/borion-hub.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Sintaxe JavaScript: js/data/initial-data.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Sintaxe JavaScript: js/legacy-migration-v253.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Sintaxe JavaScript: js/mobile-experience.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Sintaxe JavaScript: js/personalization-v221.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Sintaxe JavaScript: js/pts-completo.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Sintaxe JavaScript: js/services/borion-interop-source.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Sintaxe JavaScript: js/services/finance-status.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Sintaxe JavaScript: js/services/google-drive.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Sintaxe JavaScript: js/services/identifiers.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Sintaxe JavaScript: js/services/money.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Sintaxe JavaScript: js/services/pdf.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Sintaxe JavaScript: js/services/phone.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Sintaxe JavaScript: js/services/stock-health.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Sintaxe JavaScript: js/services/storage.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Sintaxe JavaScript: js/v227-corrections.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Sintaxe JavaScript: js/v255-marco-review.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Sintaxe JavaScript: js/v256-final-adjustments.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Sintaxe JavaScript: js/v259-layout-livre.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Sintaxe JavaScript: js/vendor/qrcode-local.js",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Remoção visual ocorre antes da chamada de persistência",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Exclusão pendente aplicada na normalização",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Fila única de escrita na nuvem",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Confirmação limpa marcador pendente",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Fila v2.5.5 preserva backup/opções",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Estado não sincronizado bloqueia atualização remota",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Versão do manifesto é 2.6.6",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Cache PWA é 2.6.6",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Assets usam cache-busting 2.6.6",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Validação funcional 20/20",
+      "ok": true,
+      "detail": ""
+    }
+  ]
+}

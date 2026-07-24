@@ -139,17 +139,24 @@
     try{
       while(SAVE.pending.length){
         let target=latestPending();
+        const covered=SAVE.pending.filter(item=>item.revision<=target.revision);
+        const saveOptions={
+          backup:covered.some(item=>item.options?.backup===true),
+          media:covered.some(item=>item.options?.media!==false),
+          reason:String(target.action||'fila-v255')
+        };
         try{
           // Mídias pendentes podem atualizar o estado; quando nenhuma edição nova entrou
           // durante o upload, atualizamos o snapshot desta revisão antes de gravá-lo.
-          await syncPendingMedia();
+          if(saveOptions.media)await syncPendingMedia();
           if(SAVE.requested===target.revision){
             target={...target,stateSnapshot:clone(STATE)};
             const index=SAVE.pending.findIndex(item=>item.revision===target.revision);if(index>=0)SAVE.pending[index]=target;
           }
-          const result=await flushCloudState('fila-v255',{backup:false,retryMedia:false,stateSnapshot:target.stateSnapshot});
+          const result=await serializeCloudWrite(()=>flushCloudState(saveOptions.reason,{backup:saveOptions.backup,retryMedia:false,stateSnapshot:target.stateSnapshot}));
           SAVE.confirmed=Math.max(SAVE.confirmed,target.revision);SAVE.lastError=null;discardConfirmed(target.revision);
           LAST_CONFIRMED_STATE=clone(result.stateSnapshot||target.stateSnapshot);await MarcoStorage.saveSyncBase?.(LAST_CONFIRMED_STATE);
+          confirmPendingPaymentDeletions(LAST_CONFIRMED_STATE);
           clearTimeout(SAVE.retryTimer);SAVE.retryTimer=0;
           setSaveStatus(result.bridge&&!result.bridge.skipped?'Drive + Borion_Integracoes confirmados':'Google Drive confirmado','ok');
         }catch(error){
@@ -157,7 +164,8 @@
           if(error?.baseCommitted){
             const committed=error.stateSnapshot||target.stateSnapshot;
             SAVE.confirmed=Math.max(SAVE.confirmed,target.revision);discardConfirmed(target.revision);LAST_CONFIRMED_STATE=clone(committed);await MarcoStorage.saveSyncBase?.(committed);
-            setSaveStatus('Dados no Drive · integração com Borion pendente','warn');scheduleCloudRetry('fila-v255');continue;
+            confirmPendingPaymentDeletions(committed);
+            setSaveStatus('Dados no Drive · integração com Borion pendente','warn');scheduleCloudRetry(saveOptions.reason);continue;
           }
           setSaveStatus('Alteração aguardando Google Drive · nova tentativa em 5 s','warn');scheduleFullRetry();break;
         }
@@ -175,11 +183,11 @@
     if(action)addAudit(action,detail);
     reconcileNextIds(data());STATE.updatedAt=new Date().toISOString();window.MarcoBorionInterop?.prepareState?.(STATE);
     const revision=++SAVE.requested;
-    SAVE.pending.push({revision,stateSnapshot:clone(STATE),action:String(action||'alteracao')});
+    SAVE.pending.push({revision,stateSnapshot:clone(STATE),action:String(action||'alteracao'),options:{backup:!!opts.backup,media:opts.media!==false}});
     setSaveStatus('Salvando em segundo plano…','warn');setPendingFlag();queueMicrotask(()=>runSaveQueue().catch(error=>console.error('[V255_BACKGROUND_SAVE]',error)));
     return {queued:true,revision,cloud:true,drive:'pending',errors:[]};
   };
-  hasUnsyncedLocalState=function(){return savePending();};
+  hasUnsyncedLocalState=function(){return savePending()||BACKGROUND_SAVE_COMPLETED<BACKGROUND_SAVE_REQUESTED||PENDING_PAYMENT_DELETIONS.size>0;};
   window.addEventListener('beforeunload',event=>{if(!savePending())return;event.preventDefault();event.returnValue='Há alterações aguardando confirmação no Google Drive.';});
 
   const generatePdfBase=generatePdfForOrder;

@@ -4,7 +4,7 @@
  * Camada integrada de regras, telas e migração. Executada antes do boot.
  */
 (() => {
-  const PTS_VERSION = '2.6.5';
+  const PTS_VERSION = '2.6.6';
   const OPERATIONAL_STATUSES = ['Orçamento','Em andamento','Aguardando peça','Concluída','Cancelada'];
   const PAYMENT_METHODS = ['Pix','Dinheiro','Débito','Crédito (À vista)','Crédito 2x','Crédito 3x','Crédito 4x','Crédito 5x','Crédito 6x','Crédito 7x','Crédito 8x','Crédito 9x','Crédito 10x','Crédito 11x','Crédito 12x','Boleto','Transferência','Outro'];
   const EQUIPMENT_TYPES = ['Computador Gamer','Computador de Escritório','Notebook Gamer','Notebook','Celular','Monitor','Impressora','Console','Game Stick','Rack','Teclado','Roteador','Mouse'];
@@ -945,7 +945,7 @@
     try{await MarcoStorage.createBackup(STATE,'antes-do-reset-completo');}catch(e){console.warn(e);}
     try{MarcoStorage.downloadJson(STATE,`Marco_Iris_Backup_Antes_Reset_${Date.now()}.json`);}catch(e){console.warn(e);}
     if(GoogleDriveMarco.isConfigured()){
-      try{await flushCloudState('antes-reset-completo',{backup:true,retryMedia:true});}catch(e){console.warn('Backup na nuvem antes do reset não foi confirmado:',e);}
+      try{await serializeCloudWrite(()=>flushCloudState('antes-reset-completo',{backup:true,retryMedia:true}));}catch(e){console.warn('Backup na nuvem antes do reset não foi confirmado:',e);}
     }
     try{window.MarcoBorionInterop?.stop?.();}catch(e){console.warn(e);}
     try{GoogleDriveMarco.disconnect();}catch(e){console.warn(e);}

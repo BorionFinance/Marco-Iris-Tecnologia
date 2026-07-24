@@ -1,11 +1,11 @@
 'use strict';
 
-/* Marco Iris Tecnologia v2.6.5 — ajustes finais solicitados após a migração.
+/* Marco Iris Tecnologia v2.6.6 — ajustes finais solicitados após a migração.
  * Esta camada é carregada por último para preservar a base histórica e substituir
  * somente apresentação, filtros, cliques e personalização visual.
  */
 (() => {
-  const VERSION='2.6.5';
+  const VERSION='2.6.6';
   const ORDER_STATUSES=['Orçamento','Em andamento','Aguardando peça','Concluída','Cancelada'];
   const INTERACTIVE_SELECTOR='button,a,input,select,textarea,label,summary,details,[role="button"],[contenteditable="true"]';
   const ENTITY_EDIT_ACTION={service:'edit-service',product:'edit-product',supply:'edit-supply',movement:'edit-stock-movement'};
@@ -101,7 +101,7 @@
       }
       s.migrations.layoutNormalDefaultsV263={version:VERSION,appliedAt:new Date().toISOString()};
     }
-    // v2.6.5: corrige somente o editor do Novo/Editar lançamento.
+    // v2.6.6: corrige somente o editor do Novo/Editar lançamento.
     // Layouts antigos desse formulário podiam guardar coordenadas quebradas; os demais editores não são tocados.
     if(!s.migrations.paymentLayoutRepairV265){
       const layouts=s.unifiedLayoutsV256||{};
