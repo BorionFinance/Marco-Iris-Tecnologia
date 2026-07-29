@@ -18,6 +18,8 @@
   const TAG_BYTES = 16;
   const RECOVERY_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   const RECOVERY_LENGTH = 30;
+  const BIOMETRIC_PREFIX = 'borion_secure_biometric_v1:';
+  const BIOMETRIC_SCHEMA = 1;
   const encoder = new TextEncoder();
   const decoder = new TextDecoder('utf-8', { fatal: true });
   const contexts = new Map();
@@ -34,23 +36,264 @@
   }
 
   function bytesToBase64(bytes) {
-    let binary = '';
-    for (let offset = 0; offset < bytes.length; offset += 0x8000) {
-      binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+    const source = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+    const parts = [];
+    for (let offset = 0; offset < source.length; offset += 4096) {
+      parts.push(String.fromCharCode(...source.subarray(offset, offset + 4096)));
     }
-    return btoa(binary);
+    return btoa(parts.join(''));
   }
 
   function base64ToBytes(value, { exact = null, min = 1, max = MAX_CIPHERTEXT } = {}) {
     if (typeof value !== 'string' || !value || value.length > Math.ceil(max * 4 / 3) + 8) fail('SECURE_VAULT_INVALID_BASE64');
-    if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)) fail('SECURE_VAULT_INVALID_BASE64');
-    let binary;
-    try { binary = atob(value); } catch (error) { fail('SECURE_VAULT_INVALID_BASE64', error); }
-    if (exact !== null && binary.length !== exact) fail('SECURE_VAULT_INVALID_LENGTH');
-    if (binary.length < min || binary.length > max) fail('SECURE_VAULT_INVALID_LENGTH');
-    const bytes = new Uint8Array(binary.length);
-    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    if (value.length % 4 !== 0) fail('SECURE_VAULT_INVALID_BASE64');
+    const padding = value.endsWith('==') ? 2 : (value.endsWith('=') ? 1 : 0);
+    const dataEnd = value.length - padding;
+    for (let index = 0; index < dataEnd; index += 1) {
+      const code = value.charCodeAt(index);
+      const valid = (code >= 65 && code <= 90)
+        || (code >= 97 && code <= 122)
+        || (code >= 48 && code <= 57)
+        || code === 43
+        || code === 47;
+      if (!valid) fail('SECURE_VAULT_INVALID_BASE64');
+    }
+    for (let index = dataEnd; index < value.length; index += 1) {
+      if (value.charCodeAt(index) !== 61) fail('SECURE_VAULT_INVALID_BASE64');
+    }
+    const length = (value.length / 4) * 3 - padding;
+    if (exact !== null && length !== exact) fail('SECURE_VAULT_INVALID_LENGTH');
+    if (length < min || length > max) fail('SECURE_VAULT_INVALID_LENGTH');
+    const decode = code => {
+      if (code >= 65 && code <= 90) return code - 65;
+      if (code >= 97 && code <= 122) return code - 71;
+      if (code >= 48 && code <= 57) return code + 4;
+      if (code === 43) return 62;
+      if (code === 47) return 63;
+      return 0;
+    };
+    const bytes = new Uint8Array(length);
+    let output = 0;
+    for (let index = 0; index < value.length; index += 4) {
+      const packed = (decode(value.charCodeAt(index)) << 18)
+        | (decode(value.charCodeAt(index + 1)) << 12)
+        | (decode(value.charCodeAt(index + 2)) << 6)
+        | decode(value.charCodeAt(index + 3));
+      if (output < length) bytes[output++] = (packed >>> 16) & 255;
+      if (output < length) bytes[output++] = (packed >>> 8) & 255;
+      if (output < length) bytes[output++] = packed & 255;
+    }
     return bytes;
+  }
+
+  function bytesToBase64Url(bytes) {
+    return bytesToBase64(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  function base64UrlToBytes(value, options = {}) {
+    if (typeof value !== 'string' || !/^[A-Za-z0-9_-]+$/.test(value)) fail('SECURE_VAULT_INVALID_BIOMETRIC_RECORD');
+    const base64 = value.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(value.length / 4) * 4, '=');
+    return base64ToBytes(base64, options);
+  }
+
+  function isMobileBiometricDevice() {
+    try {
+      return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '')
+        || !!window.matchMedia?.('(pointer: coarse)')?.matches;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  async function biometricPlatformAvailable() {
+    if (
+      !isMobileBiometricDevice()
+      || !window.PublicKeyCredential
+      || !navigator.credentials?.create
+      || !navigator.credentials?.get
+      || typeof PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable !== 'function'
+    ) return false;
+    try {
+      return await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function biometricStorageKey(appId, vaultId) {
+    return `${BIOMETRIC_PREFIX}${appId}:${vaultId}`;
+  }
+
+  function biometricAad(appId, vaultId, credentialId) {
+    return encoder.encode(`${FORMAT}|BIOMETRIC|${BIOMETRIC_SCHEMA}|${appId}|${vaultId}|${credentialId}`);
+  }
+
+  function readBiometricRecord(appId, vaultId) {
+    let record = null;
+    try { record = JSON.parse(localStorage.getItem(biometricStorageKey(appId, vaultId)) || 'null'); }
+    catch (_) { return null; }
+    if (
+      !record
+      || Number(record.schema) !== BIOMETRIC_SCHEMA
+      || record.appId !== appId
+      || record.vaultId !== vaultId
+      || typeof record.createdAt !== 'string'
+    ) return null;
+    try {
+      const credentialId = base64UrlToBytes(record.credentialId, { min: 16, max: 1024 });
+      const salt = base64UrlToBytes(record.salt, { exact: 32, max: 32 });
+      const iv = base64UrlToBytes(record.iv, { exact: 12, max: 12 });
+      const data = base64UrlToBytes(record.data, { min: 17, max: 4096 });
+      credentialId.fill(0); salt.fill(0); iv.fill(0); data.fill(0);
+      return record;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  async function biometricWrapKey(prfBytes) {
+    const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', prfBytes));
+    try {
+      return await crypto.subtle.importKey('raw', digest, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+    } finally {
+      digest.fill(0);
+    }
+  }
+
+  function biometricPrfBytes(assertion) {
+    const first = assertion?.getClientExtensionResults?.()?.prf?.results?.first;
+    if (!first) fail('SECURE_VAULT_BIOMETRIC_UNAVAILABLE');
+    const bytes = new Uint8Array(first);
+    if (bytes.length < 16 || bytes.length > 128) fail('SECURE_VAULT_BIOMETRIC_UNAVAILABLE');
+    return bytes;
+  }
+
+  async function enrollBiometric(appId, appName, vaultId, password, ownerId) {
+    if (!(await biometricPlatformAvailable())) return false;
+    const userId = randomBytes(32);
+    const challenge = randomBytes(32);
+    let credential;
+    try {
+      credential = await navigator.credentials.create({
+        publicKey: {
+          rp: { name: appName, id: window.location.hostname },
+          user: {
+            id: userId,
+            name: String(ownerId || `${appId}-vault`).slice(0, 64),
+            displayName: appName.slice(0, 64)
+          },
+          challenge,
+          pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+          authenticatorSelection: {
+            authenticatorAttachment: 'platform',
+            userVerification: 'required',
+            residentKey: 'preferred'
+          },
+          attestation: 'none',
+          timeout: 60000,
+          extensions: { prf: {} }
+        }
+      });
+    } finally {
+      userId.fill(0);
+      challenge.fill(0);
+    }
+    if (!credential?.getClientExtensionResults?.()?.prf?.enabled) fail('SECURE_VAULT_BIOMETRIC_UNAVAILABLE');
+    const credentialIdText = bytesToBase64Url(credential.rawId);
+    const credentialId = base64UrlToBytes(credentialIdText, { min: 16, max: 1024 });
+    const salt = randomBytes(32);
+    const assertionChallenge = randomBytes(32);
+    let assertion;
+    try {
+      assertion = await navigator.credentials.get({
+        publicKey: {
+          challenge: assertionChallenge,
+          rpId: window.location.hostname,
+          allowCredentials: [{ id: credentialId, type: 'public-key', transports: ['internal'] }],
+          userVerification: 'required',
+          timeout: 60000,
+          extensions: { prf: { eval: { first: salt } } }
+        }
+      });
+    } finally {
+      assertionChallenge.fill(0);
+      credentialId.fill(0);
+    }
+    const prfBytes = biometricPrfBytes(assertion);
+    const wrapKey = await biometricWrapKey(prfBytes);
+    prfBytes.fill(0);
+    const iv = randomBytes(12);
+    const passwordBytes = encoder.encode(password);
+    const associated = biometricAad(appId, vaultId, credentialIdText);
+    try {
+      const encrypted = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv, additionalData: associated, tagLength: 128 },
+        wrapKey,
+        passwordBytes
+      );
+      localStorage.setItem(biometricStorageKey(appId, vaultId), JSON.stringify({
+        schema: BIOMETRIC_SCHEMA,
+        appId,
+        vaultId,
+        credentialId: credentialIdText,
+        salt: bytesToBase64Url(salt),
+        iv: bytesToBase64Url(iv),
+        data: bytesToBase64Url(encrypted),
+        createdAt: new Date().toISOString()
+      }));
+      return true;
+    } finally {
+      salt.fill(0);
+      iv.fill(0);
+      passwordBytes.fill(0);
+      associated.fill(0);
+    }
+  }
+
+  async function unlockWithBiometric(appId, envelope) {
+    const record = readBiometricRecord(appId, envelope.vaultId);
+    if (!record || !(await biometricPlatformAvailable())) return null;
+    const credentialId = base64UrlToBytes(record.credentialId, { min: 16, max: 1024 });
+    const salt = base64UrlToBytes(record.salt, { exact: 32, max: 32 });
+    const iv = base64UrlToBytes(record.iv, { exact: 12, max: 12 });
+    const data = base64UrlToBytes(record.data, { min: 17, max: 4096 });
+    const challenge = randomBytes(32);
+    let plainBytes;
+    try {
+      const assertion = await navigator.credentials.get({
+        publicKey: {
+          challenge,
+          rpId: window.location.hostname,
+          allowCredentials: [{ id: credentialId, type: 'public-key', transports: ['internal'] }],
+          userVerification: 'required',
+          timeout: 60000,
+          extensions: { prf: { eval: { first: salt } } }
+        }
+      });
+      const prfBytes = biometricPrfBytes(assertion);
+      const wrapKey = await biometricWrapKey(prfBytes);
+      prfBytes.fill(0);
+      const associated = biometricAad(appId, envelope.vaultId, record.credentialId);
+      try {
+        plainBytes = new Uint8Array(await crypto.subtle.decrypt(
+          { name: 'AES-GCM', iv, additionalData: associated, tagLength: 128 },
+          wrapKey,
+          data
+        ));
+      } finally {
+        associated.fill(0);
+      }
+      const password = decoder.decode(plainBytes);
+      const dek = await unwrapDek(envelope, password, 'password');
+      return dek;
+    } finally {
+      credentialId.fill(0);
+      salt.fill(0);
+      iv.fill(0);
+      data.fill(0);
+      challenge.fill(0);
+      plainBytes?.fill(0);
+    }
   }
 
   function randomId() {
@@ -297,6 +540,19 @@
       };
       const envelope = await updateEnvelope(value);
       downloadRecovery(appName, appId, recoveryCode);
+      if (
+        !readBiometricRecord(appId, vaultId)
+        && await biometricPlatformAvailable()
+        && window.confirm(`${appName}\n\nDeseja ativar a biometria neste celular para os proximos acessos?`)
+      ) {
+        try {
+          await enrollBiometric(appId, appName, vaultId, password, ownerId);
+          window.alert('Biometria ativada neste dispositivo.');
+        } catch (error) {
+          console.warn('[SecureJsonVault] A biometria nao foi ativada; a senha mestra continua disponivel:', error);
+          window.alert('Este navegador nao concluiu a ativacao da biometria. A senha mestra continuara funcionando normalmente.');
+        }
+      }
       return envelope;
     }
 
@@ -366,12 +622,31 @@
     async function requestUnlock(envelope) {
       if (!ownerBinding) fail('SECURE_VAULT_OWNER_REQUIRED');
       if (envelope.ownerBinding !== ownerBinding) fail('SECURE_VAULT_WRONG_OWNER');
+      if (readBiometricRecord(appId, envelope.vaultId)) {
+        try {
+          const biometricDek = await unlockWithBiometric(appId, envelope);
+          if (biometricDek) return biometricDek;
+        } catch (error) {
+          console.warn('[SecureJsonVault] Biometria cancelada ou indisponivel; solicitando a senha mestra:', error);
+        }
+      }
       for (let attempt = 0; attempt < 3; attempt += 1) {
         const password = window.prompt(`${appName}\n\nDigite sua senha mestra para descriptografar os dados.`);
         if (password === null) fail('SECURE_VAULT_UNLOCK_CANCELLED');
         try {
           const dek = await unwrapDek(envelope, password, 'password');
-          await decryptEnvelope(envelope, dek);
+          if (
+            !readBiometricRecord(appId, envelope.vaultId)
+            && await biometricPlatformAvailable()
+            && window.confirm(`${appName}\n\nDeseja ativar a biometria neste celular para os proximos acessos?`)
+          ) {
+            try {
+              await enrollBiometric(appId, appName, envelope.vaultId, password, ownerId);
+              window.alert('Biometria ativada neste dispositivo.');
+            } catch (biometricError) {
+              console.warn('[SecureJsonVault] A biometria nao foi ativada; a senha mestra continua disponivel:', biometricError);
+            }
+          }
           return dek;
         } catch (error) {
           if (error?.code && !['SECURE_VAULT_AUTHENTICATION_FAILED', 'SECURE_VAULT_INVALID_SECRET'].includes(error.code)) throw error;
@@ -390,9 +665,11 @@
 
     async function open(value, options = {}) {
       if (!looksLikeEnvelope(value)) {
-        if (isSensitive(value) && options.prepare !== false && options.interactive !== false) {
-          if (!key || !template) await createEnvelope(value);
+        if (isSensitive(value)) {
           plaintextMigrationPending = true;
+          if (options.prepare !== false && options.interactive !== false && (!key || !template)) {
+            await createEnvelope(value);
+          }
         }
         return value;
       }

@@ -27,9 +27,13 @@
   const AUTOSAVE_INTERVAL_MS=60*1000;
   const BACKUP_SLOT_PREFIX='marco_iris_v240_backup_slot_';
   const ENCRYPTED_BACKUPS_MARKER_PREFIX='marco_iris_encrypted_backups_v1_';
+  const ENCRYPTED_BACKUPS_QUEUE_PREFIX='marco_iris_encrypted_backups_queue_v2_';
   const INSTALLATION_FILE='Marco_Iris_Instalacao.json';
   let structurePromise=null;
   let connectionPromise=null;
+  let primaryEncryptionTimer=null;
+  let backupEncryptionTimer=null;
+  let encryptionMigrationInFlight=false;
   const integrationFileIds=new Map();
   const integrationFilePromises=new Map();
   const dataFilePromises=new Map();
@@ -168,21 +172,53 @@
   async function createFolder(parentId,name){return await createMetadata({name,mimeType:'application/vnd.google-apps.folder',parents:[parentId]});}
   async function uploadMediaContent(fileId,blob){const r=await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media&fields=id,name,mimeType,modifiedTime,size,webViewLink,webContentLink,thumbnailLink`,{method:'PATCH',headers:{...(await headers()),'Content-Type':blob.type||'application/octet-stream'},body:blob});if(!r.ok)throw new Error('Falha ao enviar o arquivo para o Google Drive.');return await r.json();}
   async function updateJson(fileId,obj){const protectedObject=await SecureVault.protect(obj);return await uploadMediaContent(fileId,new Blob([JSON.stringify(protectedObject,null,2)],{type:'application/json'}));}
-  async function readJson(fileId){const r=await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,{headers:await headers()});if(!r.ok)throw new Error('Falha ao carregar os dados do Google Drive.');return await SecureVault.open(await r.json());}
+  async function readJson(fileId){const r=await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,{headers:await headers()});if(!r.ok)throw new Error('Falha ao carregar os dados do Google Drive.');return await SecureVault.open(await r.json(),{prepare:false});}
+  function deviceIsMobile(){return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent||'')||!!window.matchMedia?.('(pointer: coarse)')?.matches;}
+  function foregroundSavePending(){return saveQueueCompleted<saveQueueRequested||!!saveQueuePromise;}
+  function readBackupEncryptionQueue(folderId){try{const q=JSON.parse(localStorage.getItem(ENCRYPTED_BACKUPS_QUEUE_PREFIX+folderId)||'null');return Array.isArray(q)?q.filter(item=>item?.id&&item?.name):null;}catch(_){return null;}}
+  function writeBackupEncryptionQueue(folderId,queue){localStorage.setItem(ENCRYPTED_BACKUPS_QUEUE_PREFIX+folderId,JSON.stringify(queue));}
+  function schedulePrimaryEncryptionMigration(folderId,file,state,delay=10000){
+    if(!SecureVault.needsMigration()){scheduleBackupEncryptionMigration(folderId);return;}
+    if(primaryEncryptionTimer)clearTimeout(primaryEncryptionTimer);
+    primaryEncryptionTimer=setTimeout(async()=>{
+      primaryEncryptionTimer=null;
+      if(!SecureVault.needsMigration()){scheduleBackupEncryptionMigration(folderId);return;}
+      if(encryptionMigrationInFlight||foregroundSavePending()){schedulePrimaryEncryptionMigration(folderId,file,state,15000);return;}
+      encryptionMigrationInFlight=true;
+      try{
+        const latest=await meta(file.id);
+        if(file.modifiedTime&&latest.modifiedTime&&file.modifiedTime!==latest.modifiedTime)throw new Error('A base foi atualizada durante a espera; a migracao usara a revisao mais nova no proximo ciclo.');
+        const updated=await updateJson(file.id,state),confirmed=await readJson(file.id),check=validateOfficialState(confirmed);
+        if(!check.valid)throw new Error('A conversao criptografada da base principal nao foi confirmada.');
+        SecureVault.markMigrated();
+        Drive.currentFile=updated;
+        scheduleBackupEncryptionMigration(folderId,15000);
+      }catch(error){
+        console.warn('[MarcoDrive] A abertura continuou normalmente; a criptografia sera retomada sem bloquear o aplicativo:',error);
+        schedulePrimaryEncryptionMigration(folderId,file,state,60000);
+      }finally{encryptionMigrationInFlight=false;}
+    },delay);
+  }
+  function scheduleBackupEncryptionMigration(folderId,delay=30000){
+    if(localStorage.getItem(ENCRYPTED_BACKUPS_MARKER_PREFIX+folderId)==='1'||deviceIsMobile())return;
+    if(backupEncryptionTimer)clearTimeout(backupEncryptionTimer);
+    backupEncryptionTimer=setTimeout(()=>{backupEncryptionTimer=null;migrateBackupEncryption(folderId).catch(error=>{console.warn('[MarcoDrive] Um backup antigo sera tentado novamente mais tarde:',error);scheduleBackupEncryptionMigration(folderId,120000);});},delay);
+  }
   async function migrateBackupEncryption(folderId){
-    const files=await listChildren(folderId,'application/json');let migrated=0;
-    for(const file of files){
+    if(encryptionMigrationInFlight||foregroundSavePending()){scheduleBackupEncryptionMigration(folderId,30000);return 0;}
+    encryptionMigrationInFlight=true;
+    try{
+      let files=readBackupEncryptionQueue(folderId);
+      if(files===null){files=await listChildren(folderId,'application/json');writeBackupEncryptionQueue(folderId,files.map(file=>({id:file.id,name:file.name})));}
+      const file=files[0];
+      if(!file){localStorage.setItem(ENCRYPTED_BACKUPS_MARKER_PREFIX+folderId,'1');localStorage.removeItem(ENCRYPTED_BACKUPS_QUEUE_PREFIX+folderId);return 0;}
+      let migrated=0;
       const response=await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`,{headers:await headers()});
       if(!response.ok)throw new Error(`Falha ao verificar a criptografia do backup ${file.name}.`);
       const raw=await response.json();
-      if(SecureVault.isEnvelope(raw)||!SecureVault.isSensitive(raw))continue;
-      await updateJson(file.id,raw);
-      const verify=await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`,{headers:await headers()});
-      const confirmed=verify.ok?await verify.json():null;
-      if(!SecureVault.isEnvelope(confirmed))throw new Error(`A criptografia do backup ${file.name} não foi confirmada.`);
-      migrated+=1;
-    }
-    return migrated;
+      if(!SecureVault.isEnvelope(raw)&&SecureVault.isSensitive(raw)){await updateJson(file.id,raw);const verify=await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`,{headers:await headers()});const confirmed=verify.ok?await verify.json():null;if(!SecureVault.isEnvelope(confirmed))throw new Error(`A criptografia do backup ${file.name} nao foi confirmada.`);migrated=1;}
+      files.shift();writeBackupEncryptionQueue(folderId,files);scheduleBackupEncryptionMigration(folderId,30000);return migrated;
+    }finally{encryptionMigrationInFlight=false;}
   }
   async function meta(fileId){const r=await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=id,name,mimeType,createdTime,modifiedTime,size,parents,trashed,webViewLink,webContentLink,thumbnailLink`,{headers:await headers()});if(!r.ok){const e=new Error('Falha ao consultar o arquivo no Google Drive.');e.status=r.status;throw e;}return await r.json();}
   async function downloadBlob(fileId){const r=await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,{headers:await headers()});if(!r.ok)throw new Error('Falha ao baixar o arquivo do Google Drive.');return await r.blob();}
@@ -288,7 +324,7 @@
   }
   async function writeInstallationManifest(rootIdValue,structure,state,user){
     if(!rootIdValue||!structure||!state)return null;
-    const manifest={schema:'marco.iris.installation',schemaVersion:1,appId:'marco-iris-tecnologia',appVersion:'2.7.0',createdOrUpdatedAt:new Date().toISOString(),companyInstanceId:companyIdOf(state),googleAccount:String(user?.email||''),rootFolderId:rootIdValue,folders:Object.fromEntries(Object.entries(FOLDERS).map(([key,name])=>[key,{name,id:structure[key]||''}]))};
+    const manifest={schema:'marco.iris.installation',schemaVersion:1,appId:'marco-iris-tecnologia',appVersion:'2.7.1',createdOrUpdatedAt:new Date().toISOString(),companyInstanceId:companyIdOf(state),googleAccount:String(user?.email||''),rootFolderId:rootIdValue,folders:Object.fromEntries(Object.entries(FOLDERS).map(([key,name])=>[key,{name,id:structure[key]||''}]))};
     const file=await resolveIntegrationFile(rootIdValue,INSTALLATION_FILE,true,manifest);
     await updateJson(file.id,manifest);
     const confirmed=await readJson(file.id);
@@ -440,7 +476,7 @@
         const rebased=rebaseLocalChanges(baseState,startedSnapshot,remoteState);
         result=await saveDataFile(structure.data,rebased,{reason:`reconciliado-${reason}`});
       }
-      this.currentFile=result.file;await applyConfirmedState(state,result.state,startedSnapshot);localStorage.setItem(LAST_SAVE,new Date().toISOString());await writeInstallationManifest(connectedRoot,structure,result.state,user);if(backup){await writeRotatingBackup(structure.backups,result.state,{kind:'forcesave',force:true});const name=`Marco_Iris_${String(reason).replace(/[^a-zA-Z0-9_-]/g,'-')}_${stamp()}.json`;const bf=await createMetadata({name,mimeType:'application/json',parents:[structure.backups]});await updateJson(bf.id,result.state);}return result.file;
+      this.currentFile=result.file;await applyConfirmedState(state,result.state,startedSnapshot);localStorage.setItem(LAST_SAVE,new Date().toISOString());await writeInstallationManifest(connectedRoot,structure,result.state,user);if(backup){await writeRotatingBackup(structure.backups,result.state,{kind:'forcesave',force:true});const name=`Marco_Iris_${String(reason).replace(/[^a-zA-Z0-9_-]/g,'-')}_${stamp()}.json`;const bf=await createMetadata({name,mimeType:'application/json',parents:[structure.backups]});await updateJson(bf.id,result.state);}if(SecureVault.needsMigration()&&!result.unchanged){SecureVault.markMigrated();scheduleBackupEncryptionMigration(structure.backups);}return result.file;
     },
     async load({interactive=false,rememberBase=true}={}){
       const connection=await this.ensureConnection(interactive);
@@ -451,23 +487,8 @@
       if(!check.valid)throw new Error('A base oficial do Google Drive é inválida: '+check.errors.join(' '));
       ensureCompanyId(state);
       if(SecureVault.needsMigration()){
-        await writeRotatingBackup(connection.structure.backups,state,{kind:'forcesave',force:true});
-        info=await updateJson(f.id,state);
-        const confirmed=await readJson(f.id);
-        check=validateOfficialState(confirmed);
-        if(!check.valid)throw new Error('A conversão da base Marco Iris para o formato criptografado não foi confirmada. A abertura foi bloqueada.');
-        SecureVault.markMigrated();
-        state=confirmed;
-      }
-      const backupMarker=ENCRYPTED_BACKUPS_MARKER_PREFIX+connection.structure.backups;
-      if(localStorage.getItem(backupMarker)!=='1'){
-        try{
-          await migrateBackupEncryption(connection.structure.backups);
-          localStorage.setItem(backupMarker,'1');
-        }catch(error){
-          console.warn('[MarcoDrive] A base principal esta protegida, mas a verificacao dos backups antigos sera repetida no proximo acesso:',error);
-        }
-      }
+        schedulePrimaryEncryptionMigration(connection.structure.backups,f,state);
+      }else scheduleBackupEncryptionMigration(connection.structure.backups);
       this.currentFile=info;
       if(rememberBase&&window.MarcoStorage?.saveSyncBase)await window.MarcoStorage.saveSyncBase(state);
       return {state,meta:info};
@@ -554,7 +575,7 @@
     async writeAutosave(state,{force=false}={}){const {structure}=await this.ensureConnection(false);return await writeRotatingBackup(structure.backups,state,{kind:'autosave',force});},
     async writeForceSave(state){const {structure}=await this.ensureConnection(false);return await writeRotatingBackup(structure.backups,state,{kind:'forcesave',force:true});},
     async diagnose(state){const conn=await this.ensureConnection(false),main=await this.findDataFile(),bridge=await this.readIntegrationJson('marco-iris.bridge.json');return {ok:!!(main&&bridge),user:conn.user,rootId:conn.rootId,folders:await this.folderStatus(),mainFile:main||null,bridgeFile:bridge?{revision:Number(bridge.revision)||0,recordCount:Number(bridge.recordCount)||0,generatedAt:bridge.generatedAt||'',companyInstanceId:bridge.companyInstanceId||bridge.instanceId||''}:null,companyInstanceId:companyIdOf(state),lastSave:localStorage.getItem(LAST_SAVE)||''};},
-    disconnect(){const u=Auth.cached(),root=rootId();if(u)localStorage.removeItem(rootKey(u.sub));if(root)localStorage.removeItem(structKey(root));for(let i=localStorage.length-1;i>=0;i--){const key=localStorage.key(i)||'';if(key.startsWith('marco_iris_v240_'))localStorage.removeItem(key);}window.MarcoStorage?.clearSyncBase?.().catch?.(()=>{});this.currentFile=null;structurePromise=null;connectionPromise=null;integrationFileIds.clear();integrationFilePromises.clear();dataFilePromises.clear();saveQueueRequested=saveQueueCompleted=0;saveQueueState=null;saveQueueOptions={};saveQueueWaiters=[];Auth.signOut();},
+    disconnect(){const u=Auth.cached(),root=rootId();if(u)localStorage.removeItem(rootKey(u.sub));if(root)localStorage.removeItem(structKey(root));for(let i=localStorage.length-1;i>=0;i--){const key=localStorage.key(i)||'';if(key.startsWith('marco_iris_v240_'))localStorage.removeItem(key);}window.MarcoStorage?.clearSyncBase?.().catch?.(()=>{});this.currentFile=null;structurePromise=null;connectionPromise=null;integrationFileIds.clear();integrationFilePromises.clear();dataFilePromises.clear();if(primaryEncryptionTimer)clearTimeout(primaryEncryptionTimer);if(backupEncryptionTimer)clearTimeout(backupEncryptionTimer);primaryEncryptionTimer=backupEncryptionTimer=null;encryptionMigrationInFlight=false;saveQueueRequested=saveQueueCompleted=0;saveQueueState=null;saveQueueOptions={};saveQueueWaiters=[];Auth.signOut();},
     __test:{applyConfirmedState,prepareOfficialState,assertSafeReplacement,validateOfficialState,decideOfficialSource,explicitLocalDeletionCoverage,contentChecksum,rebaseLocalChanges,mergeArrayDelta,writeRotatingBackup,enqueueSave,flushSaveQueue}
   };
   window.GoogleDriveMarco=Drive;
