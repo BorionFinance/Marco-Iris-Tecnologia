@@ -1,4 +1,4 @@
-const CLOUD_ONLY_VERSION='marco-iris-v2.6.6-cloud-only';
+const CLOUD_ONLY_VERSION='marco-iris-v2.7.0-secure-fast-sync';
 
 self.addEventListener('install',event=>{
   event.waitUntil(self.skipWaiting());

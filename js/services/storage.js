@@ -10,6 +10,11 @@
    * para credenciais técnicas do Google e IDs da pasta escolhida.
    */
   const DATA_FILE='Marco_Iris_Dados.json';
+  const Vault=window.SecureJsonVault.forApp({
+    appId:'marco-iris-tecnologia',
+    appName:'Marco Iris Tecnologia',
+    isSensitive:value=>!!(value&&typeof value==='object'&&value.appId==='marco-iris-tecnologia'&&value.dataByProfile)
+  });
   const LEGACY_DATABASES=[
     'marco_iris_tecnologia_db_v240_clean',
     'marco_iris_tecnologia_db',
@@ -75,9 +80,9 @@
   async function readFromFolder(){throw new Error('O modo nuvem obrigatória carrega dados somente do Google Drive.');}
 
   function stamp(){const d=new Date(),p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}_${p(d.getHours())}-${p(d.getMinutes())}-${p(d.getSeconds())}`;}
-  function downloadJson(state,filename=`Marco_Iris_Backup_${stamp()}.json`){downloadBlob(new Blob([JSON.stringify(state,null,2)],{type:'application/json'}),filename);}
+  async function downloadJson(state,filename=`Marco_Iris_Backup_${stamp()}.json`){const protectedState=await Vault.protect(state);downloadBlob(new Blob([JSON.stringify(protectedState,null,2)],{type:'application/json'}),filename);}
   function downloadBlob(blob,filename){const u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1000);}
-  async function readUploadedJson(file){const obj=JSON.parse(await file.text());if(obj?.appId!=='marco-iris-tecnologia'||!obj.dataByProfile)throw new Error('Arquivo incompatível com o sistema Marco Iris.');return obj;}
+  async function readUploadedJson(file){const obj=await Vault.open(JSON.parse(await file.text()));if(obj?.appId!=='marco-iris-tecnologia'||!obj.dataByProfile)throw new Error('Arquivo incompatível com o sistema Marco Iris.');return obj;}
 
   async function deleteLegacyDatabase(name){
     if(!globalThis.indexedDB)return false;
