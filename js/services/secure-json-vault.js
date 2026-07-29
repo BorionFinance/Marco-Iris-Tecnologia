@@ -24,6 +24,243 @@
   const decoder = new TextDecoder('utf-8', { fatal: true });
   const contexts = new Map();
 
+  let secureDialogQueue = Promise.resolve();
+  let secureDialogSequence = 0;
+
+  function secureDialogTheme(name) {
+    const themes = {
+      borion: {
+        backdrop: 'rgba(0, 3, 6, .76)',
+        card: 'linear-gradient(160deg, rgba(17,22,27,.99), rgba(7,10,13,.99))',
+        border: 'rgba(204, 161, 96, .34)',
+        text: '#f4f1eb',
+        muted: '#9ca3ad',
+        accent: '#cca160',
+        accentText: '#171005',
+        input: 'rgba(255,255,255,.045)',
+        inputBorder: 'rgba(204,161,96,.32)',
+        shadow: '0 30px 90px rgba(0,0,0,.58)'
+      },
+      marco: {
+        backdrop: 'rgba(1, 10, 22, .78)',
+        card: 'linear-gradient(160deg, rgba(9,39,75,.99), rgba(3,23,47,.99))',
+        border: 'rgba(91, 164, 241, .30)',
+        text: '#edf6ff',
+        muted: '#9db3cb',
+        accent: '#2f8cff',
+        accentText: '#ffffff',
+        input: 'rgba(255,255,255,.055)',
+        inputBorder: 'rgba(91,164,241,.34)',
+        shadow: '0 30px 90px rgba(0,8,22,.58)'
+      },
+      amanda: {
+        backdrop: 'rgba(63, 32, 46, .42)',
+        card: 'linear-gradient(160deg, rgba(255,255,255,.995), rgba(255,247,251,.995))',
+        border: 'rgba(212, 95, 146, .24)',
+        text: '#2d2330',
+        muted: '#7d6d76',
+        accent: '#d45f92',
+        accentText: '#ffffff',
+        input: '#fffafd',
+        inputBorder: 'rgba(212,95,146,.32)',
+        shadow: '0 30px 90px rgba(73,35,53,.28)'
+      }
+    };
+    return themes[name] || themes.borion;
+  }
+
+  async function waitForDialogBody() {
+    if (document.body) return;
+    await new Promise(resolve => document.addEventListener('DOMContentLoaded', resolve, { once: true }));
+  }
+
+  function ensureSecureDialogStyles() {
+    if (document.getElementById('secure-json-vault-dialog-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'secure-json-vault-dialog-styles';
+    style.textContent = `
+      .sjv-overlay{position:fixed;inset:0;z-index:2147483646;display:grid;place-items:center;padding:18px;background:var(--sjv-backdrop);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);animation:sjvFade .16s ease-out}
+      .sjv-card{width:min(100%,470px);border:1px solid var(--sjv-border);border-radius:24px;background:var(--sjv-card);color:var(--sjv-text);box-shadow:var(--sjv-shadow);overflow:hidden;transform-origin:center;animation:sjvPop .20s cubic-bezier(.22,1,.36,1);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+      .sjv-head{display:flex;gap:14px;align-items:center;padding:22px 22px 14px}
+      .sjv-icon{flex:0 0 48px;width:48px;height:48px;border-radius:15px;display:grid;place-items:center;background:color-mix(in srgb,var(--sjv-accent) 15%,transparent);border:1px solid color-mix(in srgb,var(--sjv-accent) 28%,transparent);color:var(--sjv-accent)}
+      .sjv-icon svg{width:25px;height:25px;display:block}
+      .sjv-brand{min-width:0}.sjv-brand small{display:block;margin:0 0 3px;color:var(--sjv-accent);font-size:10px;font-weight:800;letter-spacing:.13em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.sjv-brand h2{margin:0;font-size:20px;line-height:1.15;letter-spacing:-.02em}
+      .sjv-body{padding:4px 22px 22px}.sjv-message{margin:0 0 16px;color:var(--sjv-muted);font-size:13px;line-height:1.55}.sjv-label{display:block;margin:0 0 7px;font-size:11px;font-weight:800;color:var(--sjv-text)}
+      .sjv-input-wrap{display:flex;align-items:center;border:1px solid var(--sjv-input-border);background:var(--sjv-input);border-radius:14px;transition:border-color .16s,box-shadow .16s}.sjv-input-wrap:focus-within{border-color:var(--sjv-accent);box-shadow:0 0 0 4px color-mix(in srgb,var(--sjv-accent) 16%,transparent)}
+      .sjv-input{min-width:0;flex:1;width:100%;border:0;outline:0;background:transparent;color:var(--sjv-text);padding:13px 14px;font:600 15px/1.2 ui-monospace,SFMono-Regular,Consolas,monospace}.sjv-input::placeholder{color:var(--sjv-muted);opacity:.68}
+      .sjv-toggle{border:0;background:transparent;color:var(--sjv-muted);padding:10px 13px;cursor:pointer;font-size:11px;font-weight:800}.sjv-toggle:hover{color:var(--sjv-text)}
+      .sjv-error{margin:10px 0 0;padding:10px 11px;border-radius:11px;background:rgba(214,71,71,.12);border:1px solid rgba(214,71,71,.24);color:#ff8d8d;font-size:11px;line-height:1.4}.sjv-note{margin:11px 0 0;color:var(--sjv-muted);font-size:10.5px;line-height:1.45}
+      .sjv-actions{display:flex;justify-content:flex-end;gap:9px;padding:15px 22px 20px;border-top:1px solid color-mix(in srgb,var(--sjv-border) 80%,transparent)}
+      .sjv-btn{min-height:42px;border-radius:13px;padding:0 17px;border:1px solid transparent;font:800 12px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;cursor:pointer;transition:transform .12s,filter .12s,background .12s}.sjv-btn:active{transform:scale(.97)}.sjv-btn-secondary{background:transparent;border-color:var(--sjv-border);color:var(--sjv-text)}.sjv-btn-secondary:hover{background:color-mix(in srgb,var(--sjv-text) 7%,transparent)}.sjv-btn-primary{background:var(--sjv-accent);color:var(--sjv-accent-text);box-shadow:0 10px 24px color-mix(in srgb,var(--sjv-accent) 24%,transparent)}.sjv-btn-primary:hover{filter:brightness(1.06)}
+      @keyframes sjvFade{from{opacity:0}to{opacity:1}}@keyframes sjvPop{from{opacity:0;transform:translateY(10px) scale(.975)}to{opacity:1;transform:none}}
+      @media(max-width:520px){.sjv-overlay{padding:12px;align-items:end}.sjv-card{border-radius:24px 24px 18px 18px}.sjv-head{padding:20px 18px 13px}.sjv-body{padding:3px 18px 20px}.sjv-actions{padding:14px 18px 18px}.sjv-btn{flex:1}.sjv-icon{width:44px;height:44px;flex-basis:44px}}
+      @media(prefers-reduced-motion:reduce){.sjv-overlay,.sjv-card{animation:none}.sjv-btn,.sjv-input-wrap{transition:none}}
+    `;
+    document.head.appendChild(style);
+  }
+
+  function renderSecureDialog(config) {
+    return new Promise(async resolve => {
+      await waitForDialogBody();
+      ensureSecureDialogStyles();
+      const theme = secureDialogTheme(config.theme);
+      const overlay = document.createElement('div');
+      overlay.className = 'sjv-overlay';
+      overlay.setAttribute('role', 'presentation');
+      Object.entries(theme).forEach(([key, value]) => overlay.style.setProperty(`--sjv-${key.replace(/[A-Z]/g, match => `-${match.toLowerCase()}`)}`, value));
+
+      const card = document.createElement('section');
+      card.className = 'sjv-card';
+      card.setAttribute('role', 'dialog');
+      card.setAttribute('aria-modal', 'true');
+      const titleId = `sjv-title-${++secureDialogSequence}`;
+      card.setAttribute('aria-labelledby', titleId);
+
+      const head = document.createElement('div');
+      head.className = 'sjv-head';
+      const icon = document.createElement('div');
+      icon.className = 'sjv-icon';
+      icon.setAttribute('aria-hidden', 'true');
+      icon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10" width="14" height="10" rx="3"></rect><path d="M8.5 10V7.5a3.5 3.5 0 0 1 7 0V10"></path><path d="M12 14v2.5"></path></svg>';
+      const brand = document.createElement('div');
+      brand.className = 'sjv-brand';
+      const app = document.createElement('small');
+      app.textContent = config.appName || 'Aplicativo';
+      const title = document.createElement('h2');
+      title.id = titleId;
+      title.textContent = config.title || 'Acesso seguro';
+      brand.append(app, title);
+      head.append(icon, brand);
+
+      const form = document.createElement('form');
+      form.noValidate = true;
+      const body = document.createElement('div');
+      body.className = 'sjv-body';
+      const message = document.createElement('p');
+      message.className = 'sjv-message';
+      message.textContent = config.message || '';
+      body.appendChild(message);
+
+      let input = null;
+      let toggle = null;
+      if (config.input !== false) {
+        const label = document.createElement('label');
+        label.className = 'sjv-label';
+        label.textContent = config.label || 'Senha mestra';
+        const wrap = document.createElement('div');
+        wrap.className = 'sjv-input-wrap';
+        input = document.createElement('input');
+        input.className = 'sjv-input';
+        input.type = config.inputType || 'password';
+        input.autocomplete = config.autocomplete || 'current-password';
+        input.placeholder = config.placeholder || 'Digite sua senha';
+        input.setAttribute('aria-label', label.textContent);
+        input.setAttribute('autocapitalize', 'off');
+        input.setAttribute('spellcheck', 'false');
+        input.required = true;
+        toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.className = 'sjv-toggle';
+        toggle.textContent = 'Mostrar';
+        toggle.setAttribute('aria-label', 'Mostrar senha');
+        toggle.addEventListener('click', () => {
+          const visible = input.type === 'text';
+          input.type = visible ? 'password' : 'text';
+          toggle.textContent = visible ? 'Mostrar' : 'Ocultar';
+          toggle.setAttribute('aria-label', visible ? 'Mostrar senha' : 'Ocultar senha');
+          input.focus({ preventScroll: true });
+        });
+        wrap.append(input, toggle);
+        label.appendChild(wrap);
+        body.appendChild(label);
+      }
+
+      if (config.error) {
+        const error = document.createElement('p');
+        error.className = 'sjv-error';
+        error.setAttribute('role', 'alert');
+        error.textContent = config.error;
+        body.appendChild(error);
+      }
+      if (config.note !== false) {
+        const note = document.createElement('p');
+        note.className = 'sjv-note';
+        note.textContent = config.note || 'A senha é processada somente neste dispositivo para abrir os dados criptografados.';
+        body.appendChild(note);
+      }
+
+      const actions = document.createElement('div');
+      actions.className = 'sjv-actions';
+      let cancel = null;
+      if (config.cancelLabel) {
+        cancel = document.createElement('button');
+        cancel.type = 'button';
+        cancel.className = 'sjv-btn sjv-btn-secondary';
+        cancel.textContent = config.cancelLabel;
+        actions.appendChild(cancel);
+      }
+      const submit = document.createElement('button');
+      submit.type = 'submit';
+      submit.className = 'sjv-btn sjv-btn-primary';
+      submit.textContent = config.submitLabel || 'Continuar';
+      actions.appendChild(submit);
+      form.append(body, actions);
+      card.append(head, form);
+      overlay.appendChild(card);
+
+      const previousOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      document.body.appendChild(overlay);
+      let settled = false;
+      const finish = value => {
+        if (settled) return;
+        settled = true;
+        document.removeEventListener('keydown', onKeydown, true);
+        if (input) input.value = '';
+        overlay.remove();
+        document.body.style.overflow = previousOverflow;
+        resolve(value);
+      };
+      const onKeydown = event => {
+        if (event.key === 'Escape' && cancel) {
+          event.preventDefault();
+          finish(null);
+        }
+      };
+      document.addEventListener('keydown', onKeydown, true);
+      if (cancel) cancel.addEventListener('click', () => finish(null));
+      form.addEventListener('submit', event => {
+        event.preventDefault();
+        if (input && !input.value) {
+          input.focus({ preventScroll: true });
+          return;
+        }
+        finish(input ? input.value : '__accepted__');
+      });
+      requestAnimationFrame(() => (input || submit).focus({ preventScroll: true }));
+    });
+  }
+
+  function secureDialog(config) {
+    const task = secureDialogQueue.then(() => renderSecureDialog(config), () => renderSecureDialog(config));
+    secureDialogQueue = task.then(() => undefined, () => undefined);
+    return task;
+  }
+
+  async function securePrompt(config) {
+    const value = await secureDialog({ ...config, input: true });
+    return value === null ? null : String(value);
+  }
+
+  async function secureConfirm(config) {
+    return (await secureDialog({ ...config, input: false, cancelLabel: config.cancelLabel || 'Cancelar' })) !== null;
+  }
+
+  async function secureAlert(config) {
+    await secureDialog({ ...config, input: false, cancelLabel: '' });
+  }
+
+
   function fail(code, cause) {
     const error = new Error(code);
     error.code = code;
@@ -447,25 +684,49 @@
     return !!(value && typeof value === 'object' && value.format === FORMAT);
   }
 
-  function promptNewPassword(appName) {
+  async function promptNewPassword(appId, appName, dialogTheme) {
+    let error = '';
     for (;;) {
-      const password = window.prompt(`${appName}\n\nCrie uma senha mestra exclusiva com pelo menos ${MIN_PASSWORD} caracteres. Ela protege os dados antes de sairem deste dispositivo.`);
+      const password = await securePrompt({
+        appId,
+        appName,
+        theme: dialogTheme,
+        title: 'Criar senha mestra',
+        message: `Crie uma senha exclusiva com pelo menos ${MIN_PASSWORD} caracteres. Ela protege os dados antes de sairem deste dispositivo.`,
+        label: 'Nova senha mestra',
+        placeholder: 'Digite a nova senha',
+        autocomplete: 'new-password',
+        submitLabel: 'Continuar',
+        cancelLabel: 'Cancelar',
+        error
+      });
       if (password === null) fail('SECURE_VAULT_SETUP_CANCELLED');
       if (password.length < MIN_PASSWORD || password.length > MAX_PASSWORD) {
-        window.alert(`A senha mestra precisa ter entre ${MIN_PASSWORD} e ${MAX_PASSWORD} caracteres.`);
+        error = `A senha precisa ter entre ${MIN_PASSWORD} e ${MAX_PASSWORD} caracteres.`;
         continue;
       }
-      const confirmation = window.prompt(`${appName}\n\nDigite novamente a mesma senha mestra para confirmar.`);
+      const confirmation = await securePrompt({
+        appId,
+        appName,
+        theme: dialogTheme,
+        title: 'Confirmar senha mestra',
+        message: 'Digite novamente a mesma senha para concluir a proteção dos dados.',
+        label: 'Confirme a senha mestra',
+        placeholder: 'Digite novamente',
+        autocomplete: 'new-password',
+        submitLabel: 'Ativar criptografia',
+        cancelLabel: 'Cancelar'
+      });
       if (confirmation === null) fail('SECURE_VAULT_SETUP_CANCELLED');
       if (password !== confirmation) {
-        window.alert('As senhas nao conferem. Tente novamente.');
+        error = 'As senhas não conferem. Digite novamente.';
         continue;
       }
       return password;
     }
   }
 
-  function downloadRecovery(appName, appId, recoveryCode) {
+  async function downloadRecovery(appName, appId, recoveryCode, dialogTheme) {
     const text = [
       `${appName} - chave de recuperacao`,
       '',
@@ -486,13 +747,14 @@
       link.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1500);
     } catch (_) {}
-    window.alert(`${appName}\n\nA criptografia foi ativada. Uma chave de recuperacao foi baixada.\n\n${recoveryCode}\n\nGuarde-a fora deste computador e fora do Drive do aplicativo.`);
+    await secureAlert({ appName, theme: dialogTheme, title: 'Criptografia ativada', message: `Uma chave de recuperação foi baixada.\n\n${recoveryCode}\n\nGuarde-a fora deste computador e fora do Drive do aplicativo.`, submitLabel: 'Entendi', note: false });
   }
 
   function createContext(options) {
     const appId = String(options?.appId || '').trim();
     const appName = String(options?.appName || appId || 'Aplicativo').trim();
     const isSensitive = typeof options?.isSensitive === 'function' ? options.isSensitive : (() => true);
+    const dialogTheme = String(options?.dialogTheme || 'borion').trim().toLowerCase();
     if (!appId) fail('SECURE_VAULT_INVALID_APP');
     if (contexts.has(appId)) return contexts.get(appId);
 
@@ -502,6 +764,9 @@
     let template = null;
     let plaintextMigrationPending = false;
     let queue = Promise.resolve();
+    let unlockPromise = null;
+    let unlockVaultId = '';
+    let lockGeneration = 0;
 
     async function bindOwner(value) {
       ownerId = String(value || '').trim();
@@ -518,7 +783,7 @@
 
     async function createEnvelope(value) {
       if (!ownerBinding) fail('SECURE_VAULT_OWNER_REQUIRED');
-      const password = promptNewPassword(appName);
+      const password = await promptNewPassword(appId, appName, dialogTheme);
       const recoveryCode = generateRecoveryCode();
       const recoverySecret = canonicalRecoveryCode(recoveryCode);
       const vaultId = randomId();
@@ -539,18 +804,18 @@
         createdAt: new Date().toISOString()
       };
       const envelope = await updateEnvelope(value);
-      downloadRecovery(appName, appId, recoveryCode);
+      await downloadRecovery(appName, appId, recoveryCode, dialogTheme);
       if (
         !readBiometricRecord(appId, vaultId)
         && await biometricPlatformAvailable()
-        && window.confirm(`${appName}\n\nDeseja ativar a biometria neste celular para os proximos acessos?`)
+        && await secureConfirm({ appName, theme: dialogTheme, title: 'Ativar biometria', message: 'Deseja usar a biometria deste celular nos próximos acessos?', submitLabel: 'Ativar biometria', cancelLabel: 'Agora não', note: false })
       ) {
         try {
           await enrollBiometric(appId, appName, vaultId, password, ownerId);
-          window.alert('Biometria ativada neste dispositivo.');
+          await secureAlert({ appName, theme: dialogTheme, title: 'Biometria ativada', message: 'Este dispositivo poderá usar a biometria nos próximos acessos.', submitLabel: 'Concluir', note: false });
         } catch (error) {
           console.warn('[SecureJsonVault] A biometria nao foi ativada; a senha mestra continua disponivel:', error);
-          window.alert('Este navegador nao concluiu a ativacao da biometria. A senha mestra continuara funcionando normalmente.');
+          await secureAlert({ appName, theme: dialogTheme, title: 'Biometria indisponível', message: 'O navegador não concluiu a ativação. A senha mestra continuará funcionando normalmente.', submitLabel: 'Entendi', note: false });
         }
       }
       return envelope;
@@ -630,19 +895,32 @@
           console.warn('[SecureJsonVault] Biometria cancelada ou indisponivel; solicitando a senha mestra:', error);
         }
       }
+      let unlockError = '';
       for (let attempt = 0; attempt < 3; attempt += 1) {
-        const password = window.prompt(`${appName}\n\nDigite sua senha mestra para descriptografar os dados.`);
+        const password = await securePrompt({
+          appId,
+          appName,
+          theme: dialogTheme,
+          title: 'Desbloquear dados',
+          message: 'Digite sua senha mestra para abrir a base criptografada.',
+          label: 'Senha mestra',
+          placeholder: 'Digite sua senha',
+          autocomplete: 'current-password',
+          submitLabel: 'Desbloquear',
+          cancelLabel: 'Cancelar',
+          error: unlockError
+        });
         if (password === null) fail('SECURE_VAULT_UNLOCK_CANCELLED');
         try {
           const dek = await unwrapDek(envelope, password, 'password');
           if (
             !readBiometricRecord(appId, envelope.vaultId)
             && await biometricPlatformAvailable()
-            && window.confirm(`${appName}\n\nDeseja ativar a biometria neste celular para os proximos acessos?`)
+            && await secureConfirm({ appName, theme: dialogTheme, title: 'Ativar biometria', message: 'Deseja usar a biometria deste celular nos próximos acessos?', submitLabel: 'Ativar biometria', cancelLabel: 'Agora não', note: false })
           ) {
             try {
               await enrollBiometric(appId, appName, envelope.vaultId, password, ownerId);
-              window.alert('Biometria ativada neste dispositivo.');
+              await secureAlert({ appName, theme: dialogTheme, title: 'Biometria ativada', message: 'Este dispositivo poderá usar a biometria nos próximos acessos.', submitLabel: 'Concluir', note: false });
             } catch (biometricError) {
               console.warn('[SecureJsonVault] A biometria nao foi ativada; a senha mestra continua disponivel:', biometricError);
             }
@@ -650,17 +928,46 @@
           return dek;
         } catch (error) {
           if (error?.code && !['SECURE_VAULT_AUTHENTICATION_FAILED', 'SECURE_VAULT_INVALID_SECRET'].includes(error.code)) throw error;
-          window.alert('Senha mestra incorreta.');
+          unlockError = `Senha mestra incorreta. Restam ${2 - attempt} tentativa(s).`;
         }
       }
-      if (!window.confirm('Deseja usar a chave de recuperacao deste aplicativo?')) fail('SECURE_VAULT_LOCKED');
-      const recovery = window.prompt(`${appName}\n\nDigite a chave de recuperacao.`);
+      const useRecovery = await secureConfirm({ appName, theme: dialogTheme, title: 'Usar chave de recuperação', message: 'As tentativas de senha terminaram. Deseja abrir a base com a chave de recuperação?', submitLabel: 'Usar chave', cancelLabel: 'Cancelar', note: false });
+      if (!useRecovery) fail('SECURE_VAULT_LOCKED');
+      const recovery = await securePrompt({ appId, appName, theme: dialogTheme, title: 'Chave de recuperação', message: 'Digite a chave de recuperação deste aplicativo.', label: 'Chave de recuperação', placeholder: 'XXXXX-XXXXX-XXXXX-XXXXX-XXXXX-XXXXX', autocomplete: 'off', submitLabel: 'Recuperar acesso', cancelLabel: 'Cancelar' });
       if (recovery === null) fail('SECURE_VAULT_UNLOCK_CANCELLED');
       const canonical = canonicalRecoveryCode(recovery);
       if (canonical.length !== RECOVERY_LENGTH) fail('SECURE_VAULT_INVALID_RECOVERY');
       const dek = await unwrapDek(envelope, canonical, 'recovery');
       await decryptEnvelope(envelope, dek);
       return dek;
+    }
+
+    async function ensureSessionUnlocked(envelope) {
+      if (key && template && template.vaultId === envelope.vaultId) return key;
+      if (unlockPromise) {
+        if (unlockVaultId === envelope.vaultId) return await unlockPromise;
+        try { await unlockPromise; } catch (_) {}
+        if (key && template && template.vaultId === envelope.vaultId) return key;
+      }
+      unlockVaultId = envelope.vaultId;
+      const generation = lockGeneration;
+      const activePromise = (async () => {
+        const unlocked = await requestUnlock(envelope);
+        await decryptEnvelope(envelope, unlocked);
+        if (generation !== lockGeneration) fail('SECURE_VAULT_LOCKED');
+        key = unlocked;
+        template = envelope;
+        return unlocked;
+      })();
+      unlockPromise = activePromise;
+      try {
+        return await activePromise;
+      } finally {
+        if (unlockPromise === activePromise) {
+          unlockPromise = null;
+          unlockVaultId = '';
+        }
+      }
     }
 
     async function open(value, options = {}) {
@@ -676,7 +983,10 @@
       assertEnvelope(value, appId);
       if (!ownerBinding) fail('SECURE_VAULT_OWNER_REQUIRED');
       if (value.ownerBinding !== ownerBinding) fail('SECURE_VAULT_WRONG_OWNER');
-      if (!key || !template || template.vaultId !== value.vaultId) key = await requestUnlock(value);
+      if (!key || !template || template.vaultId !== value.vaultId) {
+        if (options.interactive === false) fail('SECURE_VAULT_LOCKED');
+        key = await ensureSessionUnlocked(value);
+      }
       const plain = await decryptEnvelope(value, key);
       if (!template || template.vaultId !== value.vaultId || Number(value.revision) >= Number(template.revision || 0)) {
         template = value;
@@ -715,9 +1025,12 @@
     }
 
     function lock() {
+      lockGeneration += 1;
       key = null;
       template = null;
       plaintextMigrationPending = false;
+      unlockPromise = null;
+      unlockVaultId = '';
     }
 
     const context = Object.freeze({
