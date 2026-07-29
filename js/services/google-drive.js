@@ -136,7 +136,7 @@
   async function assertAuthorizedUser(user){const hash=await accountHash(user?.email);if(!hash||!ALLOWED_ACCOUNT_HASHES.has(hash)){Auth.signOut();throw new Error('Esta conta Google não está autorizada a acessar o Marco Iris Tecnologia.');}return user;}
   async function authenticateGoogle(interactive=true){await Auth.ensure(interactive);return await assertAuthorizedUser(await Auth.fetchUser());}
   async function headers(json=false){const token=await Auth.ensure(false);return json?{Authorization:`Bearer ${token}`,'Content-Type':'application/json'}:{Authorization:`Bearer ${token}`};}
-  function safeQuery(v){return String(v).replace(/'/g,"\\'");}
+  function safeQuery(v){return String(v).replace(/\\/g,"\\\\").replace(/'/g,"\\'");}
   async function findChildren(parentId,name,mimeType=''){
     let q=`'${parentId}' in parents and name='${safeQuery(name)}' and trashed=false`;if(mimeType)q+=` and mimeType='${mimeType}'`;
     const params=new URLSearchParams({q,orderBy:'createdTime asc',pageSize:'100',fields:'files(id,name,mimeType,createdTime,modifiedTime,size,parents,trashed,webViewLink,webContentLink,thumbnailLink)'});
