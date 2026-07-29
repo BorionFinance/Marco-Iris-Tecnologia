@@ -26,7 +26,7 @@
 */
 
 const GOOGLE_CLIENT_ID = '946105310952-gp143h81mm3704lrq3877hsie49njgak.apps.googleusercontent.com';
-const GOOGLE_API_KEY = 'AIzaSyAMm_8CtFg_YP2ssG4XaiBbOc7wuJFq7xs';
+const GOOGLE_API_KEY = 'AIzaSyDhIJJ7XgvJC1i6NzylSZI2vs3RuvuRjn4';
 const GOOGLE_PROJECT_NUMBER = '946105310952';
 const GOOGLE_DRIVE_SCOPES = 'openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/drive.file';
 /* V6.8.0 — teto de tamanho da pasta "backups" no Drive, combinado com você: 10GB.
