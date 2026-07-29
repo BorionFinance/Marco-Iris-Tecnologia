@@ -334,7 +334,7 @@ const GoogleDriveFS = {
   },
 
   async findChildren(parentId,name,mimeType,options={}){
-    const safeName=String(name).replace(/'/g,"\\'");
+    const safeName=String(name).replace(/\\/g,"\\\\").replace(/'/g,"\\'");
     let q=`'${parentId}' in parents and name='${safeName}' and trashed=false`;
     if(mimeType) q+=` and mimeType='${mimeType}'`;
     const files=await this.listQuery(q,Object.assign({orderBy:'createdTime,name'},options));
