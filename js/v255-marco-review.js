@@ -42,8 +42,8 @@
     }
     for(const prefix of ['REC','DES']){
       const max=(pd.payments||[]).filter(p=>paymentPrefix(p)===prefix).reduce((m,x)=>Math.max(m,sequenceFrom(x?.id),sequenceFrom(x?.code)),0);
-      const wanted=Math.max(1,max+1),current=Math.max(1,Number(pd.settings.nextIds[prefix])||1);
-      pd.settings.nextIds[prefix]=allowLower?wanted:Math.max(current,wanted);
+      const wanted=Math.max(1,max+1);
+      pd.settings.nextIds[prefix]=wanted;
     }
     return pd.settings.nextIds;
   }

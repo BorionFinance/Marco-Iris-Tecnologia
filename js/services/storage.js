@@ -81,7 +81,7 @@
   async function readFromFolder(){throw new Error('O modo nuvem obrigatória carrega dados somente do Google Drive.');}
 
   function stamp(){const d=new Date(),p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}_${p(d.getHours())}-${p(d.getMinutes())}-${p(d.getSeconds())}`;}
-  async function downloadJson(state,filename=`Marco_Iris_Backup_${stamp()}.json`){const protectedState=await Vault.protect(state);downloadBlob(new Blob([JSON.stringify(protectedState,null,2)],{type:'application/json'}),filename);}
+  async function downloadJson(state,filename=`Marco_Iris_Backup_${stamp()}.json`){const protectedState=await Vault.protect(state);downloadBlob(new Blob([JSON.stringify(protectedState,null,2)],{type:'application/json'}),filename);await Vault.confirmSetupPersisted?.(Vault.status?.().vaultId||'');}
   function downloadBlob(blob,filename){const u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1000);}
   async function readUploadedJson(file){const obj=await Vault.open(JSON.parse(await file.text()));if(obj?.appId!=='marco-iris-tecnologia'||!obj.dataByProfile)throw new Error('Arquivo incompatível com o sistema Marco Iris.');return obj;}
 

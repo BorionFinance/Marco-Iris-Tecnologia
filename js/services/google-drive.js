@@ -173,7 +173,7 @@
   async function createMetadata(meta){const r=await fetch('https://www.googleapis.com/drive/v3/files?fields=id,name,mimeType,createdTime,modifiedTime,size,parents,trashed,webViewLink,webContentLink',{method:'POST',headers:await headers(true),body:JSON.stringify(meta)});if(!r.ok)throw new Error(`Falha ao criar “${meta.name}” no Google Drive.`);return await r.json();}
   async function createFolder(parentId,name){return await createMetadata({name,mimeType:'application/vnd.google-apps.folder',parents:[parentId]});}
   async function uploadMediaContent(fileId,blob){const r=await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media&fields=id,name,mimeType,modifiedTime,size,webViewLink,webContentLink,thumbnailLink`,{method:'PATCH',headers:{...(await headers()),'Content-Type':blob.type||'application/octet-stream'},body:blob});if(!r.ok)throw new Error('Falha ao enviar o arquivo para o Google Drive.');return await r.json();}
-  async function updateJson(fileId,obj){const protectedObject=await SecureVault.protect(obj);return await uploadMediaContent(fileId,new Blob([JSON.stringify(protectedObject,null,2)],{type:'application/json'}));}
+  async function updateJson(fileId,obj){const protectedObject=await SecureVault.protect(obj);const result=await uploadMediaContent(fileId,new Blob([JSON.stringify(protectedObject,null,2)],{type:'application/json'}));await SecureVault.confirmSetupPersisted?.(SecureVault.status?.().vaultId||'');return result;}
   async function readJson(fileId){const r=await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,{headers:await headers()});if(!r.ok)throw new Error('Falha ao carregar os dados do Google Drive.');return await SecureVault.open(await r.json(),{prepare:false});}
   function deviceIsMobile(){return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent||'')||!!window.matchMedia?.('(pointer: coarse)')?.matches;}
   function foregroundSavePending(){return saveQueueCompleted<saveQueueRequested||!!saveQueuePromise;}
@@ -326,7 +326,7 @@
   }
   async function writeInstallationManifest(rootIdValue,structure,state,user){
     if(!rootIdValue||!structure||!state)return null;
-    const manifest={schema:'marco.iris.installation',schemaVersion:1,appId:'marco-iris-tecnologia',appVersion:'2.7.2',createdOrUpdatedAt:new Date().toISOString(),companyInstanceId:companyIdOf(state),googleAccount:String(user?.email||''),rootFolderId:rootIdValue,folders:Object.fromEntries(Object.entries(FOLDERS).map(([key,name])=>[key,{name,id:structure[key]||''}]))};
+    const manifest={schema:'marco.iris.installation',schemaVersion:1,appId:'marco-iris-tecnologia',appVersion:'2.7.4',createdOrUpdatedAt:new Date().toISOString(),companyInstanceId:companyIdOf(state),googleAccount:String(user?.email||''),rootFolderId:rootIdValue,folders:Object.fromEntries(Object.entries(FOLDERS).map(([key,name])=>[key,{name,id:structure[key]||''}]))};
     const file=await resolveIntegrationFile(rootIdValue,INSTALLATION_FILE,true,manifest);
     await updateJson(file.id,manifest);
     const confirmed=await readJson(file.id);
@@ -489,7 +489,19 @@
       if(!check.valid)throw new Error('A base oficial do Google Drive é inválida: '+check.errors.join(' '));
       ensureCompanyId(state);
       if(SecureVault.needsMigration()){
-        schedulePrimaryEncryptionMigration(connection.structure.backups,f,state);
+        // A ativação inicial precisa terminar no arquivo oficial antes de
+        // liberar o sistema. Em segundo plano, uma recarga podia interromper
+        // o processo e fazer o app pedir para criar outra senha mestra.
+        const latest=await meta(f.id);
+        if(info.modifiedTime&&latest.modifiedTime&&info.modifiedTime!==latest.modifiedTime)throw new Error('A base foi atualizada durante a ativação da criptografia. Reabra o aplicativo para carregar a versão mais recente.');
+        const updated=await updateJson(f.id,state);
+        const confirmed=await readJson(f.id);
+        const encryptedCheck=validateOfficialState(confirmed);
+        if(!encryptedCheck.valid)throw new Error('A conversão criptografada da base principal não foi confirmada.');
+        SecureVault.markMigrated();
+        state=confirmed;
+        info=updated;
+        scheduleBackupEncryptionMigration(connection.structure.backups,15000);
       }else scheduleBackupEncryptionMigration(connection.structure.backups);
       this.currentFile=info;
       if(rememberBase&&window.MarcoStorage?.saveSyncBase)await window.MarcoStorage.saveSyncBase(state);
@@ -570,8 +582,8 @@
     async folderStatus(){const {structure}=await this.ensureConnection(false);return Object.entries(FOLDERS).map(([key,name])=>({key,name,id:structure[key],url:`https://drive.google.com/drive/folders/${structure[key]}`}));},
     /* BORION INTEROP v1.0.0 — protected transport seam. */
     async integrationFolderId(){const {structure}=await this.ensureConnection(false);return structure.integration;},
-    async writeIntegrationJson(name,obj){const folderId=await this.integrationFolderId();const f=await resolveIntegrationFile(folderId,name,true,obj);const result=await updateJson(f.id,await IntegrationVault.protect(obj));if(IntegrationVault.needsMigration())IntegrationVault.markMigrated();return result;},
-    async readIntegrationJson(name){const folderId=await this.integrationFolderId();const f=await resolveIntegrationFile(folderId,name,false,null);if(!f)return null;const r=await fetch(`https://www.googleapis.com/drive/v3/files/${f.id}?alt=media`,{headers:await headers()});if(!r.ok)throw new Error('Falha ao carregar a integração do Google Drive.');const value=await IntegrationVault.open(await r.json());if(IntegrationVault.needsMigration()){await updateJson(f.id,await IntegrationVault.protect(value));IntegrationVault.markMigrated();}return value;},
+    async writeIntegrationJson(name,obj){const folderId=await this.integrationFolderId();const f=await resolveIntegrationFile(folderId,name,true,obj);const result=await updateJson(f.id,await IntegrationVault.protect(obj));await IntegrationVault.confirmSetupPersisted?.(IntegrationVault.status?.().vaultId||'');if(IntegrationVault.needsMigration())IntegrationVault.markMigrated();return result;},
+    async readIntegrationJson(name){const folderId=await this.integrationFolderId();const f=await resolveIntegrationFile(folderId,name,false,null);if(!f)return null;const r=await fetch(`https://www.googleapis.com/drive/v3/files/${f.id}?alt=media`,{headers:await headers()});if(!r.ok)throw new Error('Falha ao carregar a integração do Google Drive.');const value=await IntegrationVault.open(await r.json());if(IntegrationVault.needsMigration()){await updateJson(f.id,await IntegrationVault.protect(value));await IntegrationVault.confirmSetupPersisted?.(IntegrationVault.status?.().vaultId||'');IntegrationVault.markMigrated();}return value;},
     async writeBackupJson(name,obj){const {structure}=await this.ensureConnection(false);const safeName=String(name||`backup-${stamp()}.json`).replace(/[\\/:*?"<>|]/g,'-');const f=await createMetadata({name:safeName,mimeType:'application/json',parents:[structure.backups]});await updateJson(f.id,obj);const confirmed=await readJson(f.id);return {file:f,state:confirmed};},
     enqueueSave,flushSaveQueue,
     async writeAutosave(state,{force=false}={}){const {structure}=await this.ensureConnection(false);return await writeRotatingBackup(structure.backups,state,{kind:'autosave',force});},

@@ -33,6 +33,23 @@ let BACKGROUND_SAVE_WAITERS=[];
 let BACKGROUND_SAVE_RETRY_TIMER=null;
 let CLOUD_WRITE_CHAIN=Promise.resolve();
 const PENDING_PAYMENT_DELETIONS=new Map();
+const PENDING_PAYMENT_DELETIONS_STORAGE_KEY='marco-iris-pending-payment-deletions-v1';
+const PAYMENT_PERMANENT_DELETE_WINDOW_MS=24*60*60*1000;
+function persistPendingPaymentDeletionsLocal(){
+  try{localStorage.setItem(PENDING_PAYMENT_DELETIONS_STORAGE_KEY,JSON.stringify([...PENDING_PAYMENT_DELETIONS.values()]));}catch(error){console.warn('[PENDING_PAYMENT_DELETIONS_SAVE]',error);}
+}
+function hydratePendingPaymentDeletionsLocal(){
+  try{
+    const stored=JSON.parse(localStorage.getItem(PENDING_PAYMENT_DELETIONS_STORAGE_KEY)||'[]');
+    if(!Array.isArray(stored))return;
+    for(const pending of stored){
+      const profileId=String(pending?.profileId||''),id=String(pending?.id||'');
+      if(!profileId||!id)continue;
+      PENDING_PAYMENT_DELETIONS.set(`${profileId}::${id}`,{profileId,id,queuedAt:pending?.queuedAt||new Date().toISOString()});
+    }
+  }catch(error){console.warn('[PENDING_PAYMENT_DELETIONS_LOAD]',error);}
+}
+hydratePendingPaymentDeletionsLocal();
 
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -111,14 +128,26 @@ function markPendingPaymentDeletion(profileId,id){
   const key=pendingPaymentDeletionKey(profileId,id);
   if(!profileId||!id)return '';
   PENDING_PAYMENT_DELETIONS.set(key,{profileId:String(profileId),id:String(id),queuedAt:nowIso()});
+  persistPendingPaymentDeletionsLocal();
   return key;
+}
+function clearPendingPaymentDeletion(profileId,id){
+  const key=pendingPaymentDeletionKey(profileId,id);
+  if(PENDING_PAYMENT_DELETIONS.delete(key))persistPendingPaymentDeletionsLocal();
 }
 function applyPendingPaymentDeletions(targetState=STATE){
   if(!targetState||!PENDING_PAYMENT_DELETIONS.size)return targetState;
-  for(const pending of PENDING_PAYMENT_DELETIONS.values()){
+  let clearedReplacement=false;
+  for(const [key,pending] of [...PENDING_PAYMENT_DELETIONS.entries()]){
     const profileData=targetState?.dataByProfile?.[pending.profileId];
-    if(profileData&&Array.isArray(profileData.payments))profileData.payments=profileData.payments.filter(item=>String(item?.id)!==pending.id&&String(item?.code)!==pending.id);
+    if(!profileData||!Array.isArray(profileData.payments))continue;
+    const matching=profileData.payments.filter(item=>String(item?.id)===pending.id||String(item?.code)===pending.id);
+    const queuedAt=Date.parse(pending.queuedAt||'');
+    const hasReplacement=matching.some(item=>{const createdAt=Date.parse(item?.createdAt||'');return Number.isFinite(queuedAt)&&Number.isFinite(createdAt)&&createdAt>=queuedAt;});
+    if(hasReplacement){PENDING_PAYMENT_DELETIONS.delete(key);clearedReplacement=true;continue;}
+    profileData.payments=profileData.payments.filter(item=>String(item?.id)!==pending.id&&String(item?.code)!==pending.id);
   }
+  if(clearedReplacement)persistPendingPaymentDeletionsLocal();
   return targetState;
 }
 function confirmPendingPaymentDeletions(savedState){
@@ -129,6 +158,7 @@ function confirmPendingPaymentDeletions(savedState){
     const stillPresent=payments.some(item=>String(item?.id)===pending.id||String(item?.code)===pending.id);
     if(!stillPresent){PENDING_PAYMENT_DELETIONS.delete(key);confirmed++;}
   }
+  if(confirmed)persistPendingPaymentDeletionsLocal();
   return confirmed;
 }
 function cloudReason(action=''){return String(action||'alteracao').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9_-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,80)||'alteracao';}
@@ -666,7 +696,8 @@ function nextCode(prefix,list,width=6,field='id'){
     const sequence=parsed?.sequence||Number(String(raw).replace(/\D/g,''))||0;
     maxExisting=Math.max(maxExisting,sequence);
   }
-  const sequence=Math.max(configuredNext,maxExisting+1,1);
+  const isFinancial=normalized==='REC'||normalized==='DES';
+  const sequence=isFinancial?Math.max(maxExisting+1,1):Math.max(configuredNext,maxExisting+1,1);
   return window.MarcoIdentifiers?.formatEntityCode?.(normalized,sequence)||`${normalized}-${String(sequence).padStart(width,'0')}`;
 }
 function matches(...values){
@@ -680,6 +711,18 @@ function findOrder(id){const canonical=window.MarcoIdentifiers?.normalizeEntityC
 function orderItems(id){return data().orderItems.filter(x=>x.orderId===id);}
 function orderPayments(id){return data().payments.filter(x=>x.orderId===id);}
 function isPaymentCancelled(payment){return norm(payment?.status).includes('cancel')||!!payment?.cancelledAt;}
+function paymentCreatedAtMs(payment){
+  const raw=payment?.createdAt||'';
+  if(!raw)return Number.NaN;
+  const value=Date.parse(raw);
+  return Number.isFinite(value)?value:Number.NaN;
+}
+function canPermanentlyDeletePayment(payment,referenceTime=Date.now()){
+  const createdAt=paymentCreatedAtMs(payment);
+  if(!Number.isFinite(createdAt))return false;
+  const age=Number(referenceTime)-createdAt;
+  return age>=-5*60*1000&&age<=PAYMENT_PERMANENT_DELETE_WINDOW_MS;
+}
 function catalogItem(it){if(it.type==='Produto')return data().products.find(x=>x.id===it.productId);if(it.type==='Serviço')return data().services.find(x=>x.id===it.serviceId);return data().supplies.find(x=>x.id===it.supplyId);}
 function itemDescription(it){return catalogItem(it)?.description||it.description||it.productId||it.serviceId||it.supplyId||'Item sem descrição';}
 function realizedPaymentValue(orderId){return orderPayments(orderId).filter(p=>['pago','parcial'].includes(norm(p.status))&&norm(p.type)==='receita').reduce((s,p)=>s+num(p.value),0);}
@@ -801,7 +844,7 @@ function renderLogin(entry=''){
         <div class="lock-feature"><div class="lock-feature-icon">${icon('cloud')}</div><div><strong>Soluções em nuvem</strong><small>Fotos, PDFs, anexos e dados organizados no Google Drive.</small></div></div>
       </div>
     </section>
-    <footer class="lock-footer"><div class="lock-footer-cards"><div class="lock-footer-card"><strong><span class="status-dot-live"></span> Sistema operacional</strong><small>Interface pronta para uso.</small></div><div class="lock-footer-card"><strong>${icon('cloud')} Google Drive e backups</strong><small>Dados e arquivos em pastas separadas.</small></div><div class="lock-footer-card"><strong>${icon('download')} Aplicativo PWA</strong><small>Instalação no computador e celular.</small></div></div><div class="lock-footer-meta"><strong>Marco Iris Tecnologia © 2026</strong><span>v2.7.2</span></div></footer>
+    <footer class="lock-footer"><div class="lock-footer-cards"><div class="lock-footer-card"><strong><span class="status-dot-live"></span> Sistema operacional</strong><small>Interface pronta para uso.</small></div><div class="lock-footer-card"><strong>${icon('cloud')} Google Drive e backups</strong><small>Dados e arquivos em pastas separadas.</small></div><div class="lock-footer-card"><strong>${icon('download')} Aplicativo PWA</strong><small>Instalação no computador e celular.</small></div></div><div class="lock-footer-meta"><strong>Marco Iris Tecnologia © 2026</strong><span>v2.7.4</span></div></footer>
   </main>`;
   startLockNetwork();
 }
@@ -996,7 +1039,7 @@ async function saveOrderForm(form){
 }
 function validateStockPlan(oldItems,newItems){if(!data().settings.preventNegativeStock)return;const deltas=new Map(),all=new Map([...oldItems,...newItems].map(x=>[x.id,x]));for(const [itemId,item] of all){const latest=newItems.find(x=>x.id===itemId),ref=latest||item;if(!ref||(!ref.productId&&!ref.supplyId))continue;const desired=latest?.lowerStock?num(latest.quantity):0,applied=data().stockMovements.filter(m=>m.sourceItemId===itemId).reduce((s,m)=>s+(norm(m.movementType).startsWith('saida')?num(m.quantity):-num(m.quantity)),0),delta=desired-applied,type=ref.productId?'Produto':'Insumo',id=ref.productId||ref.supplyId,key=`${type}:${id}`;deltas.set(key,(deltas.get(key)||0)+delta);}for(const [key,delta] of deltas){const [type,id]=key.split(':'),available=stockOf(type,id),after=available-delta;if(after<-.0001){const item=type==='Produto'?data().products.find(x=>x.id===id):data().supplies.find(x=>x.id===id);throw new Error(`Estoque insuficiente para ${item?.description||id}. Disponível: ${available}; saldo previsto: ${after}.`);}}}
 function reconcileStock(orderId,oldItems,newItems){const map=new Map([...oldItems,...newItems].map(x=>[x.id,x]));for(const [itemId,item] of map){const latest=newItems.find(x=>x.id===itemId);const desired=latest?.lowerStock&&(latest.productId||latest.supplyId)?num(latest.quantity):0;const applied=data().stockMovements.filter(m=>m.sourceItemId===itemId).reduce((s,m)=>s+(norm(m.movementType).startsWith('saida')?num(m.quantity):-num(m.quantity)),0);const delta=desired-applied;if(Math.abs(delta)<0.0001)continue;const ref=latest||item,type=ref.productId?'Produto':'Insumo',stockBefore=stockOf(type,ref.productId||ref.supplyId),movementType=delta>0?'Saída':'Entrada',qty=Math.abs(delta);data().stockMovements.push({id:nextCode('MOV',data().stockMovements),itemType:type,productId:ref.productId||'',supplyId:ref.supplyId||'',movementType,quantity:qty,date:today(),orderId,notes:`Ajuste automático da ${orderId}`,stockBefore,stockAfter:stockBefore+(movementType==='Entrada'?qty:-qty),sourceItemId:itemId});}}
-async function savePaymentForm(form){const id=form.dataset.id||nextCode(form.elements.type.value==='Despesa'?'DES':'REC',data().payments);const old=data().payments.find(x=>x.id===id),v=Object.fromEntries(new FormData(form));const isExpense=v.type==='Despesa',cancelled=norm(v.status).includes('cancel');const item={id,code:old?.code||id,orderId:v.orderId,type:v.type,paymentMethod:v.paymentMethod,paymentOrigin:isExpense?(v.paymentOrigin||'Carteira'):'',expenseType:isExpense?(norm(v.expenseType)==='fixa'?'Fixa':'Variável'):'',expenseCategory:isExpense?String(v.expenseCategory||'').trim():'',localPurchase:isExpense?String(v.localPurchase||'').trim():'',value:num(v.value),dueDate:v.dueDate,paymentDate:v.status==='Pago'?(v.paymentDate||today()):v.paymentDate,status:v.status,notes:v.notes,active:!cancelled,cancelledAt:cancelled?(old?.cancelledAt||nowIso()):'',createdAt:old?.createdAt||nowIso(),updatedAt:nowIso()};if(old)Object.assign(old,item);else data().payments.push(item);await persist(old?'Lançamento atualizado':'Lançamento criado',`${item.code} · ${currency(item.value)}`);closeModal();renderView();toast(cancelled?'Lançamento cancelado e retirada do Borion programada.':'Lançamento salvo.');}
+async function savePaymentForm(form){const id=form.dataset.id||nextCode(form.elements.type.value==='Despesa'?'DES':'REC',data().payments);const old=data().payments.find(x=>x.id===id),v=Object.fromEntries(new FormData(form));const isExpense=v.type==='Despesa',cancelled=norm(v.status).includes('cancel');const item={id,code:old?.code||id,orderId:v.orderId,type:v.type,paymentMethod:v.paymentMethod,paymentOrigin:isExpense?(v.paymentOrigin||'Carteira'):'',expenseType:isExpense?(norm(v.expenseType)==='fixa'?'Fixa':'Variável'):'',expenseCategory:isExpense?String(v.expenseCategory||'').trim():'',localPurchase:isExpense?String(v.localPurchase||'').trim():'',value:num(v.value),dueDate:v.dueDate,paymentDate:v.status==='Pago'?(v.paymentDate||today()):v.paymentDate,status:v.status,notes:v.notes,active:!cancelled,cancelledAt:cancelled?(old?.cancelledAt||nowIso()):'',createdAt:old?.createdAt||nowIso(),updatedAt:nowIso()};if(old)Object.assign(old,item);else{clearPendingPaymentDeletion(activeProfile().id,id);data().payments.push(item);}await persist(old?'Lançamento atualizado':'Lançamento criado',`${item.code} · ${currency(item.value)}`);closeModal();renderView();toast(cancelled?'Lançamento cancelado e retirada do Borion programada.':'Lançamento salvo.');}
 async function saveAppointmentForm(form){const id=form.dataset.id||nextCode('AGE',data().appointments);const old=data().appointments.find(x=>x.id===id),v=Object.fromEntries(new FormData(form)),c=findClient(v.clientId);const item={id,title:v.title,clientId:v.clientId,clientName:c?.name||'',date:v.date,time:v.time,status:v.status,location:v.location,notes:v.notes,orderId:old?.orderId||'',createdAt:old?.createdAt||nowIso()};if(old)Object.assign(old,item);else data().appointments.push(item);await persist(old?'Agendamento atualizado':'Agendamento criado',`${formatDate(item.date)} ${item.time} · ${item.title}`);closeModal();renderView();toast('Agendamento salvo.');}
 async function saveProductForm(form){const id=form.dataset.id||nextCode('PRD',data().products),old=data().products.find(x=>x.id===id),v=Object.fromEntries(new FormData(form));const cost=num(v.cost),margin=num(v.margin),item={id,description:v.description,brand:v.brand,supplier:v.supplier,cost,margin,suggestedPrice:margin<1&&margin>=0?cost/(1-margin):cost*(1+margin),salePrice:num(v.salePrice),initialStock:num(v.initialStock),minimumStock:num(v.minimumStock),costUpdatedAt:today(),priceUpdatedAt:today(),status:v.status};if(old)Object.assign(old,item);else data().products.push(item);await persist(old?'Produto atualizado':'Produto criado',`${id} · ${item.description}`);closeModal();renderView();toast('Produto salvo.');}
 async function saveServiceForm(form){const id=form.dataset.id||nextCode('SRV',data().services),old=data().services.find(x=>x.id===id),v=Object.fromEntries(new FormData(form)),item={id,description:v.description,price:num(v.price),status:v.status};if(old)Object.assign(old,item);else data().services.push(item);await persist(old?'Serviço atualizado':'Serviço criado',`${id} · ${item.description}`);closeModal();renderView();toast('Serviço salvo.');}
@@ -1223,7 +1266,17 @@ async function handleAction(btn){
     if(a==='cancel-payment'){const p=data().payments.find(x=>x.id===btn.dataset.id);if(p&&await confirmAction(`Cancelar a venda ${p.code||p.id}? Ela sairá da lista e, se já estiver no Borion, será removida na próxima sincronização.`,{confirmLabel:'Cancelar venda',tone:'danger'})){await MarcoStorage.createBackup(STATE,'antes-de-cancelar-lancamento');p.status='Cancelado';p.active=false;p.cancelledAt=nowIso();p.updatedAt=nowIso();await persist('Venda cancelada',p.code||p.id,{immediate:true});renderView();toast('Venda cancelada. A remoção no Borion foi programada.');}return;}
     if(a==='delete-payment'){
       const p=data().payments.find(x=>x.id===btn.dataset.id);
-      if(p&&await confirmAction(`Excluir definitivamente o lançamento ${p.code||p.id}? Ao contrário de cancelar, ele sai completamente da lista (sem manter histórico) e, se já estiver no Borion, será removido na próxima sincronização.`,{confirmLabel:'Excluir definitivamente',tone:'danger'})){
+      if(p&&!canPermanentlyDeletePayment(p)){
+        if(isPaymentCancelled(p)){toast('Este lançamento já passou de 24 horas e permanece no histórico como cancelado.','warn');return;}
+        if(await confirmAction(`O lançamento ${p.code||p.id} já passou de 24 horas e não pode mais ser apagado definitivamente. Deseja cancelá-lo mantendo o histórico?`,{confirmLabel:'Cancelar mantendo histórico',tone:'danger'})){
+          await MarcoStorage.createBackup(STATE,'antes-de-cancelar-lancamento-historico');
+          p.status='Cancelado';p.active=false;p.cancelledAt=p.cancelledAt||nowIso();p.cancelReason=p.cancelReason||'Cancelado após a janela de exclusão definitiva';p.updatedAt=nowIso();
+          await persist('Lançamento cancelado com histórico',p.code||p.id,{immediate:true});
+          closeModal();renderView();toast('Lançamento cancelado. O ID foi preservado no histórico.');
+        }
+        return;
+      }
+      if(p&&await confirmAction(`Excluir definitivamente o lançamento ${p.code||p.id}? Como ele foi criado há menos de 24 horas, será removido por completo e o número poderá ser reutilizado se for o último da sequência.`,{confirmLabel:'Excluir definitivamente',tone:'danger'})){
         const profileId=activeProfile().id,recordId=String(p.id),label=p.code||p.id;
         markPendingPaymentDeletion(profileId,recordId);
         data().payments=data().payments.filter(x=>String(x.id)!==recordId&&String(x.code)!==recordId);
@@ -1271,7 +1324,7 @@ async function handleAction(btn){
 }
 
 window.MarcoOptimisticDeleteV266={
-  version:'2.7.2',
+  version:'2.7.4',
   pendingCount:()=>PENDING_PAYMENT_DELETIONS.size,
   pendingIds:()=>[...PENDING_PAYMENT_DELETIONS.values()].map(item=>item.id),
   apply:()=>applyPendingPaymentDeletions(STATE),
@@ -1354,7 +1407,7 @@ async function boot(){
   if(!navigator.onLine){renderCloudRequired();return;}
   renderLogin();
   if('serviceWorker' in navigator){
-    navigator.serviceWorker.register('./sw.js?v=2.7.2').then(reg=>reg?.update?.()).catch(e=>console.warn('Service worker:',e));
+    navigator.serviceWorker.register('./sw.js?v=2.7.4').then(reg=>reg?.update?.()).catch(e=>console.warn('Service worker:',e));
   }
   window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();window.__installPrompt=e;});
   window.addEventListener('offline',()=>renderCloudRequired('A internet caiu. O aplicativo foi bloqueado para evitar qualquer alteração fora do Google Drive.'));

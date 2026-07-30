@@ -767,6 +767,7 @@
     let unlockPromise = null;
     let unlockVaultId = '';
     let lockGeneration = 0;
+    let pendingRecovery = null;
 
     async function bindOwner(value) {
       ownerId = String(value || '').trim();
@@ -804,7 +805,9 @@
         createdAt: new Date().toISOString()
       };
       const envelope = await updateEnvelope(value);
-      await downloadRecovery(appName, appId, recoveryCode, dialogTheme);
+      // Entrega a chave de recuperação somente depois que o primeiro
+      // envelope tiver sido realmente persistido pelo aplicativo.
+      pendingRecovery = { vaultId, recoveryCode };
       if (
         !readBiometricRecord(appId, vaultId)
         && await biometricPlatformAvailable()
@@ -819,6 +822,17 @@
         }
       }
       return envelope;
+    }
+
+    async function confirmSetupPersisted(expectedVaultId = '') {
+      const pending = pendingRecovery;
+      if (!pending) return false;
+      const expected = String(expectedVaultId || '').trim();
+      if (expected && pending.vaultId !== expected) return false;
+      if (!template || template.vaultId !== pending.vaultId) return false;
+      pendingRecovery = null;
+      await downloadRecovery(appName, appId, pending.recoveryCode, dialogTheme);
+      return true;
     }
 
     async function updateEnvelope(value) {
@@ -1031,6 +1045,7 @@
       plaintextMigrationPending = false;
       unlockPromise = null;
       unlockVaultId = '';
+      pendingRecovery = null;
     }
 
     const context = Object.freeze({
@@ -1045,6 +1060,7 @@
       isSensitive,
       needsMigration: () => plaintextMigrationPending,
       markMigrated: () => { plaintextMigrationPending = false; },
+      confirmSetupPersisted,
       lock,
       status: () => ({ appId, ownerBound: !!ownerBinding, unlocked: !!key, migrationPending: plaintextMigrationPending, vaultId: template?.vaultId || '', revision: Number(template?.revision || 0) })
     });
