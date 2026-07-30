@@ -1,11 +1,11 @@
 'use strict';
 
-/* Marco Iris Tecnologia v2.7.4 — ajustes finais solicitados após a migração.
+/* Marco Iris Tecnologia v2.7.5 — ajustes finais solicitados após a migração.
  * Esta camada é carregada por último para preservar a base histórica e substituir
  * somente apresentação, filtros, cliques e personalização visual.
  */
 (() => {
-  const VERSION='2.7.4';
+  const VERSION='2.7.5';
   const ORDER_STATUSES=['Orçamento','Em andamento','Aguardando peça','Concluída','Cancelada'];
   const INTERACTIVE_SELECTOR='button,a,input,select,textarea,label,summary,details,[role="button"],[contenteditable="true"]';
   const ENTITY_EDIT_ACTION={service:'edit-service',product:'edit-product',supply:'edit-supply',movement:'edit-stock-movement'};
@@ -441,6 +441,7 @@
           if(!x||!y||!modalCanPlace256(proposed,placed,id))({x,y}=modalFirstFree256(span,rows,placed));
           const rect={...proposed,x,y};applyModalRect256(item,rect);placed.push(rect);
         });
+      if(isModularOrderGrid256(grid))normalizeModularOrder256(grid);
       updateModalGridHeight256(grid);
     });
     return grids;
@@ -471,7 +472,7 @@
     modal.querySelector('.layout-toolbar-v256')?.remove();
     if(editing){
       if(!MODAL_LAYOUT.snapshot)MODAL_LAYOUT.snapshot=captureModalLayout256(modal,key);
-      button?.insertAdjacentHTML('afterend','<div class="layout-toolbar-v256"><button type="button" class="btn secondary compact" data-action="cancel-layout-v256">Cancelar</button><button type="button" class="btn ghost compact" data-action="reset-layout-v256">Restaurar padrão</button><small>Grade livre: arraste para qualquer espaço vazio e redimensione pelo canto.</small></div>');
+      const layoutHelp=modal.querySelector('form[data-form="order"]')?'Layout modular: arraste um módulo para cima ou para baixo; os demais se reorganizam automaticamente.':'Grade livre: arraste para qualquer espaço vazio e redimensione pelo canto.';button?.insertAdjacentHTML('afterend',`<div class="layout-toolbar-v256"><button type="button" class="btn secondary compact" data-action="cancel-layout-v256">Cancelar</button><button type="button" class="btn ghost compact" data-action="reset-layout-v256">Restaurar padrão</button><small>${layoutHelp}</small></div>`);
       modal.querySelectorAll('[data-layout-item-v256]').forEach(item=>{item.draggable=screenBand256()!=='mobile';if(!item.querySelector(':scope > .layout-resize-handle-v256'))item.insertAdjacentHTML('beforeend','<button type="button" class="layout-resize-handle-v256" title="Arraste para redimensionar" aria-label="Arraste para redimensionar"></button>');});
     }else modal.querySelectorAll('[data-layout-item-v256]').forEach(item=>{item.draggable=false;item.querySelector(':scope > .layout-resize-handle-v256')?.remove();});
     refreshModalGrid256(modal,false);
@@ -618,6 +619,18 @@
     preview.style.setProperty('--layout-preview-x-v260',rect.x);preview.style.setProperty('--layout-preview-y-v260',rect.y);preview.style.setProperty('--layout-preview-span-v260',rect.span);preview.style.setProperty('--layout-preview-rows-v260',rect.rows);
   }
   function removeModalDropPreview256(){document.querySelectorAll('.layout-drop-preview-v260').forEach(node=>node.remove());}
+  function isModularOrderGrid256(grid){return !!grid?.closest('form[data-form="order"]')&&grid.matches('[data-layout-surface="order"],.osv-custom-layout-surface-v221');}
+  function clearModularDropTarget256(){document.querySelectorAll('.modular-drop-target-v275').forEach(node=>node.classList.remove('modular-drop-target-v275','modular-drop-after-v275'));}
+  function normalizeModularOrder256(grid){
+    if(!isModularOrderGrid256(grid))return;
+    const items=[...grid.children].filter(item=>item.dataset.layoutItemV256);
+    items.forEach((item,index)=>{
+      item.style.setProperty('--layout-order-v256',index);
+      item.style.setProperty('--layout-y-v260',index+1);
+      item.style.order=index;
+    });
+    grid.style.setProperty('--layout-grid-rows-v260',Math.max(1,items.length));
+  }
   function beginResize256(event,item,grid,kind){
     event.preventDefault();event.stopPropagation();const rect=item.getBoundingClientRect(),gridRect=grid.getBoundingClientRect(),columns=kind==='modal'?(screenBand256()==='mobile'?1:MODAL_GRID_COLUMNS):(screenBand256()==='mobile'?1:12),gap=parseFloat(getComputedStyle(grid).columnGap)||12,cell=(gridRect.width-gap*(columns-1))/columns,rowUnit=MODAL_GRID_ROW;
     RESIZE_SESSION={pointerId:event.pointerId,item,grid,kind,startX:event.clientX,startY:event.clientY,startWidth:rect.width,startHeight:rect.height,cell,gap,columns,rowUnit};
@@ -653,15 +666,35 @@
   },true);
   document.addEventListener('dragover',event=>{
     const session=MODAL_LAYOUT.drag;if(!session)return;const grid=event.target.closest('[data-layout-grid-v256]');if(!grid||grid!==session.grid)return;
-    event.preventDefault();const rect=modalDropRect256(event,session.item,grid),valid=modalCanPlace256(rect,modalGridRects256(grid),rect.id);event.dataTransfer.dropEffect=valid?'move':'none';showModalDropPreview256(grid,rect,valid);
+    event.preventDefault();
+    if(isModularOrderGrid256(grid)){
+      removeModalDropPreview256();clearModularDropTarget256();
+      const target=event.target.closest('[data-layout-item-v256]');
+      if(target&&target!==session.item){
+        const rect=target.getBoundingClientRect(),after=event.clientY>rect.top+rect.height/2;
+        target.classList.add('modular-drop-target-v275');target.classList.toggle('modular-drop-after-v275',after);
+      }
+      event.dataTransfer.dropEffect='move';return;
+    }
+    const rect=modalDropRect256(event,session.item,grid),valid=modalCanPlace256(rect,modalGridRects256(grid),rect.id);event.dataTransfer.dropEffect=valid?'move':'none';showModalDropPreview256(grid,rect,valid);
   },true);
   document.addEventListener('drop',event=>{
     const session=MODAL_LAYOUT.drag;if(!session)return;const grid=event.target.closest('[data-layout-grid-v256]');if(!grid||grid!==session.grid)return;
-    event.preventDefault();const rect=modalDropRect256(event,session.item,grid),valid=modalCanPlace256(rect,modalGridRects256(grid),rect.id);
-    if(valid){applyModalRect256(session.item,{...rect,order:rect.y*100+rect.x});updateModalGridHeight256(grid);}else toast('Esse espaço da grade já está ocupado.','warn');
-    session.item.classList.remove('is-dragging-v260');MODAL_LAYOUT.drag=null;removeModalDropPreview256();
+    event.preventDefault();
+    if(isModularOrderGrid256(grid)){
+      const target=event.target.closest('[data-layout-item-v256]');
+      if(target&&target!==session.item){
+        const rect=target.getBoundingClientRect(),after=event.clientY>rect.top+rect.height/2;
+        grid.insertBefore(session.item,after?target.nextSibling:target);
+      }else grid.appendChild(session.item);
+      normalizeModularOrder256(grid);updateModalGridHeight256(grid);
+    }else{
+      const rect=modalDropRect256(event,session.item,grid),valid=modalCanPlace256(rect,modalGridRects256(grid),rect.id);
+      if(valid){applyModalRect256(session.item,{...rect,order:rect.y*100+rect.x});updateModalGridHeight256(grid);}else toast('Esse espaço da grade já está ocupado.','warn');
+    }
+    session.item.classList.remove('is-dragging-v260');MODAL_LAYOUT.drag=null;removeModalDropPreview256();clearModularDropTarget256();
   },true);
-  document.addEventListener('dragend',()=>{MODAL_LAYOUT.drag?.item?.classList.remove('is-dragging-v260');MODAL_LAYOUT.drag=null;removeModalDropPreview256();},true);
+  document.addEventListener('dragend',()=>{MODAL_LAYOUT.drag?.item?.classList.remove('is-dragging-v260');MODAL_LAYOUT.drag=null;removeModalDropPreview256();clearModularDropTarget256();},true);
 
   window.MarcoV256={version:VERSION,periodState:periodState256,matchesPeriod:matchesPeriod256,maskPrivacy:maskPrivacy256,ensureDefaults:ensureDefaults256,decorateView:decorateView256,decorateModal:decorateModal256,captureModalLayout:captureModalLayout256,refreshModalGrid:refreshModalGrid256,layoutStore:layoutStore256,canPlaceModal:modalCanPlace256};
   requestAnimationFrame(()=>{if(!LOCKED){renderShell();decorateView256();}});
