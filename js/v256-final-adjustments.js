@@ -5,7 +5,7 @@
  * somente apresentação, filtros, cliques e personalização visual.
  */
 (() => {
-  const VERSION='2.7.5';
+  const VERSION='2.8.3';
   const ORDER_STATUSES=['Orçamento','Em andamento','Aguardando peça','Concluída','Cancelada'];
   const INTERACTIVE_SELECTOR='button,a,input,select,textarea,label,summary,details,[role="button"],[contenteditable="true"]';
   const ENTITY_EDIT_ACTION={service:'edit-service',product:'edit-product',supply:'edit-supply',movement:'edit-stock-movement'};
@@ -164,7 +164,7 @@
   renderFinance=function(){
     const mode=getViewMode('finance'),list=[...data().payments].filter(p=>matches(p.id,p.code,p.type,p.paymentMethod,p.status,p.notes,p.orderId,findOrder(p.orderId)?.clientName)).filter(p=>matchesPeriod256(p.paymentDate||p.dueDate||p.createdAt,'finance')).sort((a,b)=>String(b.paymentDate||b.dueDate||b.createdAt||'').localeCompare(String(a.paymentDate||a.dueDate||a.createdAt||''))),k=financeIndicators256();
     const effective=p=>isCancelledPayment(p)?'Cancelado':p.paymentDate?'Pago':p.dueDate&&String(p.dueDate).slice(0,10)<today()?'Vencido':num(p.value)>0?'Em aberto':'Em aberto';
-    return `<div class="grid kpis mit-finance-kpis"><div class="card kpi"><div class="kpi-icon green">${icon('finance')}</div><div><small>Receita de Serviços</small><strong>${currency(k.service)}</strong></div></div><div class="card kpi"><div class="kpi-icon blue">${icon('stock')}</div><div><small>Receita de Produtos</small><strong>${currency(k.product)}</strong></div></div><div class="card kpi"><div class="kpi-icon green">${icon('finance')}</div><div><small>Receita Total</small><strong>${currency(k.total)}</strong></div></div><div class="card kpi"><div class="kpi-icon red">${icon('finance')}</div><div><small>Despesas</small><strong>${currency(k.expenses)}</strong></div></div><div class="card kpi"><div class="kpi-icon orange">${icon('documents')}</div><div><small>Impostos</small><strong>${currency(k.taxes)}</strong></div></div><div class="card kpi"><div class="kpi-icon blue">${icon('finance')}</div><div><small>Saldo</small><strong>${currency(k.balance)}</strong></div></div><div class="card kpi"><div class="kpi-icon orange">${icon('agenda')}</div><div><small>Valores a Receber</small><strong>${currency(k.receivable)}</strong></div></div></div><div class="toolbar unified-toolbar-v256"><div class="toolbar-left"><button class="btn primary control-main-v256" data-action="new-payment">${icon('plus')} Novo lançamento</button>${periodControls256('finance')}${iconButton('export-finance','Exportar CSV','download')}</div><div class="toolbar-right">${viewModeSwitcher('finance',mode)}<span class="badge blue">${list.length} lançamentos</span></div></div><section class="card view-mode-content mode-${mode}" data-view-content="finance"><div class="table-wrap"><table class="table finance-table-v256"><thead><tr><th>Data</th><th>ID</th><th>Tipo</th><th>Cliente / OSV</th><th>Forma</th><th>Status</th><th>Taxa</th><th class="text-right">Valor líquido</th><th>Ações</th></tr></thead><tbody>${list.map(payment=>{const order=findOrder(payment.orderId),status=effective(payment);return `<tr class="clickable-row-v256" data-row-action="edit-payment" data-id="${attr(payment.id)}"><td>${formatDate(payment.paymentDate||payment.dueDate)}</td><td><strong>${esc(payment.code||payment.id)}</strong></td><td>${statusBadge(payment.type)}</td><td>${order?`<button class="text-link" data-action="view-client" data-id="${attr(order.clientId)}">${esc(order.clientName||'Cliente')}</button><button class="code-link" data-action="view-order" data-id="${attr(order.id)}">${esc(order.id)}</button>`:esc(payment.notes||'Sem OSV vinculada')}</td><td>${esc(payment.paymentMethod||'—')}</td><td>${statusBadge(status)}</td><td>${currency(payment.fee)}</td><td class="text-right"><strong class="${norm(payment.type)==='despesa'?'danger-text':'success-text'}">${norm(payment.type)==='despesa'?'- ':''}${currency(payment.value)}</strong></td><td><div class="actions"><button title="Editar lançamento" data-action="edit-payment" data-id="${attr(payment.id)}">${icon('edit')}</button><button title="Cancelar mantendo histórico" data-action="cancel-payment" data-id="${attr(payment.id)}">${icon('warning')}</button>${canPermanentlyDeletePayment(payment)?`<button title="Excluir definitivamente (disponível por 24 horas)" data-action="delete-payment" data-id="${attr(payment.id)}">${icon('trash')}</button>`:''}</div></td></tr>`;}).join('')||'<tr><td colspan="9"><div class="empty">Nenhum lançamento encontrado.</div></td></tr>'}</tbody></table></div></section>`;
+    return `<div class="grid kpis mit-finance-kpis"><div class="card kpi"><div class="kpi-icon green">${icon('finance')}</div><div><small>Receita de Serviços</small><strong>${currency(k.service)}</strong></div></div><div class="card kpi"><div class="kpi-icon blue">${icon('stock')}</div><div><small>Receita de Produtos</small><strong>${currency(k.product)}</strong></div></div><div class="card kpi"><div class="kpi-icon green">${icon('finance')}</div><div><small>Receita Total</small><strong>${currency(k.total)}</strong></div></div><div class="card kpi"><div class="kpi-icon red">${icon('finance')}</div><div><small>Despesas</small><strong>${currency(k.expenses)}</strong></div></div><div class="card kpi"><div class="kpi-icon orange">${icon('documents')}</div><div><small>Impostos</small><strong>${currency(k.taxes)}</strong></div></div><div class="card kpi"><div class="kpi-icon blue">${icon('finance')}</div><div><small>Saldo</small><strong>${currency(k.balance)}</strong></div></div><div class="card kpi"><div class="kpi-icon orange">${icon('agenda')}</div><div><small>Valores a Receber</small><strong>${currency(k.receivable)}</strong></div></div></div><div class="toolbar unified-toolbar-v256"><div class="toolbar-left"><button class="btn primary control-main-v256" data-action="new-payment">${icon('plus')} Novo lançamento</button>${periodControls256('finance')}${iconButton('export-finance','Exportar CSV','download')}</div><div class="toolbar-right">${viewModeSwitcher('finance',mode)}<span class="badge blue">${list.length} lançamentos</span></div></div><section class="card view-mode-content mode-${mode}" data-view-content="finance"><div class="table-wrap"><table class="table finance-table-v256"><thead><tr><th>Data</th><th>ID</th><th>Tipo</th><th>Cliente / OSV</th><th>Forma</th><th>Status</th><th>Taxa</th><th class="text-right">Valor líquido</th><th>Ações</th></tr></thead><tbody>${list.map(payment=>{const order=findOrder(payment.orderId),status=effective(payment);return `<tr class="clickable-row-v256" data-row-action="edit-payment" data-id="${attr(payment.id)}"><td>${formatDate(payment.paymentDate||payment.dueDate)}</td><td><strong>${esc(payment.code||payment.id)}</strong></td><td>${statusBadge(payment.type)}</td><td>${order?`<button class="text-link" data-action="view-client" data-id="${attr(order.clientId)}">${esc(order.clientName||'Cliente')}</button><button class="code-link" data-action="view-order" data-id="${attr(order.id)}">${esc(order.id)}</button>`:esc(payment.notes||'Sem OSV vinculada')}</td><td>${esc(payment.paymentMethod||'—')}</td><td>${statusBadge(status)}</td><td>${currency(payment.fee)}</td><td class="text-right"><strong class="${norm(payment.type)==='despesa'?'danger-text':'success-text'}">${norm(payment.type)==='despesa'?'- ':''}${currency(payment.value)}</strong></td><td><div class="actions"><button title="Editar lançamento" data-action="edit-payment" data-id="${attr(payment.id)}">${icon('edit')}</button><button title="Cancelar mantendo histórico" data-action="cancel-payment" data-id="${attr(payment.id)}">${icon('warning')}</button>${canPermanentlyDeletePayment(payment)?`<button title="Excluir definitivamente" data-action="delete-payment" data-id="${attr(payment.id)}">${icon('trash')}</button>`:''}</div></td></tr>`;}).join('')||'<tr><td colspan="9"><div class="empty">Nenhum lançamento encontrado.</div></td></tr>'}</tbody></table></div></section>`;
   };
 
   function catalogCount(kind,id){return (data().priceHistory||[]).filter(row=>norm(row.type)===norm(kind)&&String(row.catalogId||row.itemId||row.serviceId||row.productId||row.supplyId)===String(id)).length;}
@@ -291,6 +291,11 @@
   }
   function modalDefaultSpan256(item,key,grid){
     if(screenBand256()==='mobile')return 12;
+    const componentId=String(item.dataset.osvComponent||item.dataset.layoutItemV256||item.dataset.layoutComponent||'');
+    // Itens, pagamentos, fotos e ações finais foram concebidos como módulos de largura total.
+    // A correção vale apenas para o padrão/restauração; depois o usuário ainda pode redimensionar
+    // normalmente no Editar Layout e o tamanho salvo continua sendo respeitado.
+    if(key==='form:order'&&['itemsField','paymentsField','photosField','actionButtons'].includes(componentId))return 12;
     if(item.classList.contains('full')||grid.classList.contains('one-column'))return 12;
     if(grid.classList.contains('three'))return 4;
     if(item.matches('section.card')){
@@ -375,23 +380,26 @@
     }
     return [...body.querySelectorAll('.detail-grid-v256')];
   }
-  function paymentDefaultRect256(id,index=0){
+  function paymentDefaultRect256(id,index=0,item=null){
+    const form=item?.closest?.('form[data-form="payment"]');
+    const isExpense=norm(form?.elements?.type?.value)==='despesa';
+    const notesY=isExpense?25:17;
     const map={
       paymentId:{x:1,y:1,span:6,rows:4},
       type:{x:7,y:1,span:6,rows:4},
       orderId:{x:1,y:5,span:12,rows:4},
-      value:{x:1,y:9,span:6,rows:4},
-      paymentMethod:{x:7,y:9,span:6,rows:4},
-      paymentDate:{x:1,y:13,span:6,rows:4},
-      planned:{x:7,y:13,span:6,rows:4},
-      settlementState:{x:1,y:17,span:6,rows:4},
-      expenseName:{x:7,y:17,span:6,rows:4},
-      localPurchase:{x:1,y:21,span:6,rows:4},
-      expenseCategory:{x:7,y:21,span:6,rows:4},
-      notes:{x:1,y:25,span:12,rows:8},
-      dueDate:{x:1,y:33,span:6,rows:4},
-      fee:{x:7,y:33,span:6,rows:4},
-      cancelled:{x:1,y:37,span:12,rows:4}
+      value:{x:1,y:9,span:4,rows:4},
+      paymentMethod:{x:5,y:9,span:4,rows:4},
+      paymentDate:{x:9,y:9,span:4,rows:4},
+      planned:{x:1,y:13,span:2,rows:4},
+      dueDate:{x:1,y:13,span:4,rows:4},
+      fee:{x:5,y:13,span:4,rows:4},
+      settlementState:{x:9,y:13,span:4,rows:4},
+      expenseName:{x:1,y:17,span:6,rows:4},
+      localPurchase:{x:7,y:17,span:6,rows:4},
+      expenseCategory:{x:1,y:21,span:6,rows:4},
+      notes:{x:1,y:notesY,span:12,rows:8},
+      cancelled:{x:1,y:notesY+8,span:12,rows:4}
     };
     const rect=map[id];
     return rect?{...rect,order:rect.y*100+rect.x}:null;
@@ -433,7 +441,7 @@
           const saved=!forceDefaults&&applySaved?gridStore[id]:null;
           const preserveCurrent=!applySaved&&!forceDefaults&&!!item.style.getPropertyValue('--layout-x-v260');
           const current=preserveCurrent?modalItemRect256(item,index):null;
-          const paymentDefault=key==='form:payment'&&!saved&&!current?paymentDefaultRect256(id,index):null;
+          const paymentDefault=key==='form:payment'&&!saved&&!current?paymentDefaultRect256(id,index,item):null;
           const span=Math.max(2,Math.min(12,Number(saved?.span)||Number(current?.span)||Number(paymentDefault?.span)||modalDefaultSpan256(item,key,grid)));
           const rows=Math.max(2,Math.min(60,Number(saved?.rows)||Number(current?.rows)||Number(paymentDefault?.rows)||modalDefaultRows256(item)));
           let x=Number(saved?.x)||Number(current?.x)||Number(paymentDefault?.x)||0,y=Number(saved?.y)||Number(current?.y)||Number(paymentDefault?.y)||0;

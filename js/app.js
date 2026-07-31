@@ -86,6 +86,9 @@ const ICONS={
   cloud:'<path d="M17.5 19H7a5 5 0 1 1 1.5-9.77A6 6 0 0 1 20 12a3.5 3.5 0 0 1-2.5 7Z"/>',
   folder:'<path d="M3 5h7l2 2h9v12H3V5Z"/>',download:'<path d="M12 3v12M7 10l5 5 5-5M4 21h16"/>',
   upload:'<path d="M12 21V9M7 14l5-5 5 5M4 3h16"/>',camera:'<path d="M4 7h3l2-3h6l2 3h3v13H4V7Z"/><circle cx="12" cy="13" r="4"/>',
+  image:'<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m3 17 5-5 4 4 3-3 6 6"/>',
+  paperclip:'<path d="m21.4 11.6-8.5 8.5a6 6 0 0 1-8.5-8.5l9-9a4 4 0 0 1 5.7 5.7l-9 9a2 2 0 1 1-2.8-2.8l8.4-8.4"/>',
+  whatsapp:'<path d="M21 11.5a8.5 8.5 0 0 1-12.7 7.4L3 21l2.1-5.1A8.5 8.5 0 1 1 21 11.5Z"/><path d="M8.2 8.4c.6 2.7 2.7 4.8 5.4 5.4l1.2-1.2c.2-.2.5-.3.8-.2l2 .7c.3.1.5.4.5.7v2c0 .4-.3.7-.7.8A10.5 10.5 0 0 1 7.4 6.6c.1-.4.4-.7.8-.7h2c.3 0 .6.2.7.5l.7 2c.1.3 0 .6-.2.8l-1.2 1.2"/>',
   pdf:'<path d="M6 2h9l5 5v15H6V2Zm8 1v5h5M9 13h6M9 17h4"/>',phone:'<path d="M22 16.9v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.4 19.4 0 0 1-6-6A19.8 19.8 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.12.9.33 1.78.62 2.63a2 2 0 0 1-.45 2.11L8 9.73a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.85.29 1.73.5 2.63.62A2 2 0 0 1 22 16.9Z"/>',
   arrow:'<path d="m9 18 6-6-6-6"/>',check:'<path d="m5 12 4 4L19 6"/>',menu:'<path d="M4 6h16M4 12h16M4 18h16"/>',
   filter:'<path d="M4 5h16M7 12h10M10 19h4"/>',
@@ -717,11 +720,8 @@ function paymentCreatedAtMs(payment){
   const value=Date.parse(raw);
   return Number.isFinite(value)?value:Number.NaN;
 }
-function canPermanentlyDeletePayment(payment,referenceTime=Date.now()){
-  const createdAt=paymentCreatedAtMs(payment);
-  if(!Number.isFinite(createdAt))return false;
-  const age=Number(referenceTime)-createdAt;
-  return age>=-5*60*1000&&age<=PAYMENT_PERMANENT_DELETE_WINDOW_MS;
+function canPermanentlyDeletePayment(payment){
+  return !!payment;
 }
 function catalogItem(it){if(it.type==='Produto')return data().products.find(x=>x.id===it.productId);if(it.type==='Serviço')return data().services.find(x=>x.id===it.serviceId);return data().supplies.find(x=>x.id===it.supplyId);}
 function itemDescription(it){return catalogItem(it)?.description||it.description||it.productId||it.serviceId||it.supplyId||'Item sem descrição';}
@@ -777,7 +777,11 @@ async function submitLogin(form){
     window.MarcoBorionInterop?.setNotReady?.('Aguardando carregamento da base oficial.');
     if(button){button.disabled=true;button.classList.add('is-loading');}
     progress('Conectando ao Google Drive');
-    const result=await window.GoogleDriveMarco.initializeOfficialState(clone(window.MARCO_INITIAL_DATA),{interactive:true,onProgress:progress});
+    // Após a primeira autorização, reutiliza a conta Google já confirmada e
+    // solicita um token silencioso. A seleção de conta só reaparece quando a
+    // sessão Google realmente expirou, foi revogada ou não existe neste navegador.
+    const hasCachedGoogleAccount=!!window.GoogleDriveMarco.cachedUser?.();
+    const result=await window.GoogleDriveMarco.initializeOfficialState(clone(window.MARCO_INITIAL_DATA),{interactive:!hasCachedGoogleAccount,onProgress:progress});
     progress('Validando dados oficiais');
     STATE=result.state;
     await backupStateBeforeV220Migration(STATE,'login-drive-oficial');
@@ -844,7 +848,7 @@ function renderLogin(entry=''){
         <div class="lock-feature"><div class="lock-feature-icon">${icon('cloud')}</div><div><strong>Soluções em nuvem</strong><small>Fotos, PDFs, anexos e dados organizados no Google Drive.</small></div></div>
       </div>
     </section>
-    <footer class="lock-footer"><div class="lock-footer-cards"><div class="lock-footer-card"><strong><span class="status-dot-live"></span> Sistema operacional</strong><small>Interface pronta para uso.</small></div><div class="lock-footer-card"><strong>${icon('cloud')} Google Drive e backups</strong><small>Dados e arquivos em pastas separadas.</small></div><div class="lock-footer-card"><strong>${icon('download')} Aplicativo PWA</strong><small>Instalação no computador e celular.</small></div></div><div class="lock-footer-meta"><strong>Marco Iris Tecnologia © 2026</strong><span>v2.7.5</span></div></footer>
+    <footer class="lock-footer"><div class="lock-footer-cards"><div class="lock-footer-card"><strong><span class="status-dot-live"></span> Sistema operacional</strong><small>Interface pronta para uso.</small></div><div class="lock-footer-card"><strong>${icon('cloud')} Google Drive e backups</strong><small>Dados e arquivos em pastas separadas.</small></div><div class="lock-footer-card"><strong>${icon('download')} Aplicativo PWA</strong><small>Instalação no computador e celular.</small></div></div><div class="lock-footer-meta"><strong>Marco Iris Tecnologia © 2026</strong><span>v2.8.3</span></div></footer>
   </main>`;
   startLockNetwork();
 }
@@ -1276,7 +1280,7 @@ async function handleAction(btn){
         }
         return;
       }
-      if(p&&await confirmAction(`Excluir definitivamente o lançamento ${p.code||p.id}? Como ele foi criado há menos de 24 horas, será removido por completo e o número poderá ser reutilizado se for o último da sequência.`,{confirmLabel:'Excluir definitivamente',tone:'danger'})){
+      if(p&&await confirmAction(`Deseja excluir definitivamente este lançamento financeiro?\n\nEsta ação não poderá ser desfeita.`,{confirmLabel:'Excluir definitivamente',tone:'danger'})){
         const profileId=activeProfile().id,recordId=String(p.id),label=p.code||p.id;
         markPendingPaymentDeletion(profileId,recordId);
         data().payments=data().payments.filter(x=>String(x.id)!==recordId&&String(x.code)!==recordId);
@@ -1324,7 +1328,7 @@ async function handleAction(btn){
 }
 
 window.MarcoOptimisticDeleteV266={
-  version:'2.7.5',
+  version:'2.8.3',
   pendingCount:()=>PENDING_PAYMENT_DELETIONS.size,
   pendingIds:()=>[...PENDING_PAYMENT_DELETIONS.values()].map(item=>item.id),
   apply:()=>applyPendingPaymentDeletions(STATE),
@@ -1407,7 +1411,7 @@ async function boot(){
   if(!navigator.onLine){renderCloudRequired();return;}
   renderLogin();
   if('serviceWorker' in navigator){
-    navigator.serviceWorker.register('./sw.js?v=2.7.5').then(reg=>reg?.update?.()).catch(e=>console.warn('Service worker:',e));
+    navigator.serviceWorker.register('./sw.js?v=2.8.3').then(reg=>reg?.update?.()).catch(e=>console.warn('Service worker:',e));
   }
   window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();window.__installPrompt=e;});
   window.addEventListener('offline',()=>renderCloudRequired('A internet caiu. O aplicativo foi bloqueado para evitar qualquer alteração fora do Google Drive.'));

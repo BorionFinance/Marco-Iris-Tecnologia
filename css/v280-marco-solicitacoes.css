@@ -1,0 +1,522 @@
+/* Marco Iris Tecnologia v2.8.3 — revisao visual e funcional solicitada pelo Marco */
+
+/* Nunca permitir barra horizontal em telas e janelas do sistema. */
+html, body, #root, #modal-root, .app-shell, .main, .content, .modal, .modal-body,
+#modal-root .card, #modal-root .form-section, #modal-root .table-wrap {
+  max-width: 100%;
+  overflow-x: hidden !important;
+}
+#modal-root table { width: 100%; max-width: 100%; table-layout: fixed; }
+#modal-root th, #modal-root td { min-width: 0; overflow-wrap: anywhere; word-break: normal; }
+
+/* Informacoes diferentes na mesma coluna: espaco + bolinha, sem colar textos. */
+.inline-information-v280 > strong,
+.inline-information-v280 > small,
+.inline-information-v280 > button,
+.inline-information-v280 > .inline-dot-v280 {
+  display: inline-flex !important;
+  align-items: center;
+  vertical-align: middle;
+}
+.inline-dot-v280 {
+  margin: 0 .42rem;
+  color: var(--muted, #8aa5bf);
+  opacity: .8;
+  font-size: .78em;
+  line-height: 1;
+}
+
+/* Itens e servicos: nome ganha prioridade; valores ficam compactos e legiveis. */
+#modal-root form[data-form="order"] .item-editor-row,
+#modal-root form[data-form="order"] .item-editor-row-v280 {
+  grid-template-columns: 24px minmax(82px,.58fr) minmax(280px,2.55fr) 62px minmax(122px,.82fr) minmax(122px,.82fr) 48px 34px !important;
+  column-gap: 7px !important;
+  width: 100%;
+  min-width: 0 !important;
+  align-items: end;
+}
+#modal-root form[data-form="order"] .item-editor-row [data-item-field="ref"] { min-width: 0; }
+#modal-root form[data-form="order"] .item-editor-row [data-item-field="price"],
+#modal-root form[data-form="order"] .item-editor-row [data-item-field="subtotal"] {
+  min-width: 0;
+  font-size: inherit !important;
+}
+#modal-root form[data-form="order"] .item-editor-row .item-delete,
+#modal-root form[data-form="order"] .item-editor-row [data-action="remove-item-row"] {
+  justify-self: end !important;
+  margin-right: 0 !important;
+}
+
+/* Resumo financeiro compacto, como painel de carrinho/ERP. */
+.order-financial-breakdown-v280 {
+  width: min(100%, 600px) !important;
+  margin: 16px 0 0 auto !important;
+  padding: 18px 20px !important;
+  display: grid !important;
+  grid-template-columns: minmax(0,1fr) !important;
+  gap: 0 !important;
+  border-radius: 18px;
+}
+.order-financial-breakdown-v280 .financial-summary-row-v280,
+.order-detail-totals-v280 .financial-summary-row-v280 {
+  display: grid !important;
+  grid-template-columns: minmax(0,1fr) minmax(128px,auto) !important;
+  align-items: center;
+  gap: 22px;
+  min-height: 42px;
+  padding: 7px 0;
+  text-align: left !important;
+}
+.order-financial-breakdown-v280 .financial-summary-row-v280 > span,
+.order-financial-breakdown-v280 .financial-summary-row-v280 > label,
+.order-detail-totals-v280 .financial-summary-row-v280 > :first-child {
+  min-width: 0;
+  text-align: left !important;
+}
+.order-financial-breakdown-v280 .financial-summary-row-v280 > strong,
+.order-financial-breakdown-v280 .financial-summary-row-v280 > input,
+.order-detail-totals-v280 .financial-summary-row-v280 > b {
+  min-width: 128px;
+  justify-self: end;
+  text-align: right !important;
+  white-space: nowrap;
+}
+.order-financial-breakdown-v280 .financial-generalDiscount-v280 input {
+  width: 150px !important;
+  max-width: 100%;
+}
+.order-financial-breakdown-v280 .financial-final-v280,
+.order-detail-totals-v280 .financial-final-v280 {
+  margin-top: 9px;
+  padding-top: 17px !important;
+  border-top: 1px solid rgba(113,166,218,.28);
+  font-size: 1.12rem;
+  font-weight: 800;
+  color: #72b9ff;
+}
+.order-financial-breakdown-v280 .financial-final-v280 strong { font-size: 1.22rem; }
+
+/* Pagamentos: duas linhas claras, campos condicionais e resumo fixo a direita. */
+.payment-editor-row[data-v280-payment="1"] {
+  position: relative;
+  padding: 18px 54px 18px 18px !important;
+  overflow: visible !important;
+}
+.payment-editor-row[data-v280-payment="1"] .payment-row-main {
+  display: grid !important;
+  grid-template-columns: minmax(145px,.8fr) minmax(185px,1fr) minmax(155px,.8fr) 42px minmax(155px,.8fr) !important;
+  gap: 12px !important;
+  align-items: end;
+}
+.payment-editor-row[data-v280-payment="1"] .schedule-payment-v280 {
+  align-self: end;
+  width: 42px;
+  height: 42px;
+  border-color: rgba(94,160,228,.32);
+}
+.schedule-payment-v280.is-active {
+  color: #7ac2ff;
+  background: rgba(42,133,225,.18);
+  border-color: rgba(89,169,247,.58);
+  box-shadow: 0 0 0 3px rgba(42,133,225,.10);
+}
+.payment-editor-row[data-v280-payment="1"] .payment-row-secondary-v280 {
+  display: grid !important;
+  grid-template-columns: minmax(0,1fr) minmax(210px,250px) !important;
+  gap: 18px !important;
+  align-items: stretch;
+  margin-top: 14px;
+}
+.payment-secondary-left-v280 {
+  display: grid;
+  grid-template-columns: minmax(145px,190px) minmax(280px,1fr);
+  gap: 12px;
+  align-items: end;
+  min-width: 0;
+}
+.payment-secondary-left-v280 .fee-field.is-hidden + .payment-note { grid-column: 1 / -1; }
+.payment-note { min-width: 0; }
+.payment-notes-textarea-v280,
+.payment-notes-standalone-v280 {
+  width: min(100%, 760px) !important;
+  min-width: 240px;
+  max-width: 100%;
+  min-height: 42px;
+  resize: horizontal !important;
+  overflow-y: auto;
+}
+.payment-summary-box-v280 {
+  display: grid;
+  align-content: center;
+  gap: 0;
+  padding: 10px 14px;
+  border: 1px solid rgba(83,150,218,.27);
+  border-radius: 15px;
+  background: rgba(2,25,50,.38);
+}
+.payment-summary-line-v280 {
+  display: grid !important;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 14px;
+  min-height: 34px;
+  padding: 4px 0;
+}
+.payment-summary-line-v280 small { color: var(--muted, #9db4ca); }
+.payment-summary-line-v280 strong,
+.payment-summary-line-v280 span { justify-self: end; text-align: right; }
+.payment-editor-row[data-v280-payment="1"] .payment-delete {
+  position: absolute !important;
+  top: 14px !important;
+  right: 12px !important;
+  bottom: auto !important;
+  margin: 0 !important;
+}
+.planned-source-v280 { display: none !important; }
+.payment-summary-v280 { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; }
+.payment-summary-v280 > span { white-space: nowrap; }
+
+/* Rodape da Nova/Editar OSV: uma linha, estado a esquerda e acoes a direita. */
+.osv-form-actions-v280 {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  gap: 9px !important;
+  min-height: 58px;
+  padding: 10px 0 !important;
+}
+.osv-form-actions-v280 .pdf-status-v280 {
+  flex: 1 1 auto;
+  min-width: 170px;
+  margin-right: auto;
+  white-space: nowrap;
+}
+.pdf-status-v280 .pdf-state-icon {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: #f2f6fb;
+  box-shadow: 0 0 0 4px rgba(242,246,251,.08);
+}
+.pdf-status-v280[data-pdf-tone-v280="ready"] .pdf-state-icon,
+.pdf-status-v280[data-pdf-tone-v280="history"] .pdf-state-icon { background: #35d69b; }
+.pdf-status-v280[data-pdf-tone-v280="dirty"] .pdf-state-icon { background: #ffad3d; }
+.osv-form-actions-v280 .icon-only-v280,
+.order-detail-v280 .icon-only-v280 {
+  width: 44px;
+  min-width: 44px;
+  height: 42px;
+  padding: 0 !important;
+  display: inline-grid !important;
+  place-items: center;
+}
+.osv-form-actions-v280 .action-save { margin-left: 2px; white-space: nowrap; }
+.is-disabled-v280, .icon-only-v280:disabled { opacity: .38 !important; filter: grayscale(.7); cursor: not-allowed !important; }
+
+.permanent-delete-v280 {
+  flex: 0 0 auto;
+  color: #ff9c9c !important;
+  background: rgba(113, 35, 49, .34) !important;
+  border-color: rgba(255, 139, 139, .24) !important;
+}
+.permanent-delete-v280:hover,
+.permanent-delete-v280:focus-visible {
+  color: #ffd0d0 !important;
+  background: rgba(154, 43, 61, .52) !important;
+  border-color: rgba(255, 166, 166, .44) !important;
+}
+
+
+/* Visualizar OSV: botoes padronizados e resumo sem barra lateral. */
+.order-detail-v280 .modal-body > .toolbar .toolbar-left {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+.order-detail-v280 .order-detail-totals-v280 {
+  width: min(100%, 520px);
+  margin: 16px 0 0 auto;
+  display: grid !important;
+  gap: 0 !important;
+  text-align: left !important;
+}
+.order-detail-v280 .order-detail-totals-v280 > strong {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  text-align: right;
+}
+.order-detail-v280 .table-wrap { overflow-x: hidden !important; }
+.order-detail-v280 table { table-layout: fixed; }
+.order-detail-v280 table th:first-child,
+.order-detail-v280 table td:first-child { width: 49%; }
+.order-detail-v280 table th:not(:first-child),
+.order-detail-v280 table td:not(:first-child) { width: 17%; text-align: right; }
+
+/* Cabecalhos de modais: compactos, botoes internos e afastados das bordas. */
+#modal-root .modal-header-v280 {
+  position: relative;
+  min-height: 58px !important;
+  padding: 16px 76px 10px 22px !important;
+  align-items: center !important;
+  gap: 10px;
+}
+#modal-root .modal-header-v280 h2 { min-width: 0; margin: 0; }
+#modal-root .modal-header-v280 .modal-layout-icon-v280 {
+  position: absolute;
+  top: 13px;
+  right: 56px;
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  padding: 0 !important;
+  display: grid;
+  place-items: center;
+}
+#modal-root .modal-header-v280 .modal-close-v280 {
+  position: absolute;
+  top: 13px;
+  right: 14px;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+}
+
+/* Scroll inteligente: somente vertical e somente quando o conteudo realmente excede. */
+#modal-root .has-inner-scroll-v280 {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  overscroll-behavior-y: auto !important;
+  scrollbar-gutter: stable;
+}
+#modal-root .no-inner-scroll-v280 {
+  overflow-y: visible !important;
+  overflow-x: hidden !important;
+  overscroll-behavior: auto !important;
+}
+#modal-root .modal-body {
+  overscroll-behavior-y: auto !important;
+  scrollbar-gutter: stable;
+}
+#modal-root [data-layout-item-v256] { min-width: 0; }
+
+.vault-security-card-v280 { grid-column: 1 / -1; }
+
+@media (max-width: 1120px) {
+  #modal-root form[data-form="order"] .item-editor-row,
+  #modal-root form[data-form="order"] .item-editor-row-v280 {
+    grid-template-columns: 22px minmax(78px,.6fr) minmax(210px,2fr) 58px minmax(112px,.8fr) minmax(112px,.8fr) 44px 32px !important;
+  }
+  .payment-editor-row[data-v280-payment="1"] .payment-row-main {
+    grid-template-columns: repeat(3,minmax(0,1fr)) 42px !important;
+  }
+  .payment-editor-row[data-v280-payment="1"] .due-field { grid-column: 1 / 2; }
+}
+
+@media (max-width: 760px) {
+  #modal-root .modal-header-v280 { padding: 14px 72px 10px 16px !important; }
+  #modal-root .modal-header-v280 .modal-layout-icon-v280 { right: 50px; top: 11px; }
+  #modal-root .modal-header-v280 .modal-close-v280 { right: 10px; top: 11px; }
+
+  #modal-root form[data-form="order"] .item-editor-row,
+  #modal-root form[data-form="order"] .item-editor-row-v280 {
+    display: grid !important;
+    grid-template-columns: 22px minmax(0,1fr) 34px !important;
+    gap: 8px !important;
+    padding: 12px !important;
+  }
+  #modal-root form[data-form="order"] .item-editor-row > * { min-width: 0; }
+  #modal-root form[data-form="order"] .item-editor-row .field,
+  #modal-root form[data-form="order"] .item-editor-row .money-field { grid-column: 2 / 3; }
+  #modal-root form[data-form="order"] .item-editor-row [data-action="remove-item-row"],
+  #modal-root form[data-form="order"] .item-editor-row .item-delete { grid-column: 3; grid-row: 1; }
+  #modal-root form[data-form="order"] .item-editor-row .item-move-controls { grid-column: 1; grid-row: 1 / span 2; }
+
+  .order-financial-breakdown-v280 { width: 100% !important; padding: 14px !important; }
+  .order-financial-breakdown-v280 .financial-summary-row-v280,
+  .order-detail-totals-v280 .financial-summary-row-v280 {
+    grid-template-columns: minmax(0,1fr) auto !important;
+    gap: 12px;
+    min-height: 38px;
+  }
+  .order-financial-breakdown-v280 .financial-summary-row-v280 > strong,
+  .order-financial-breakdown-v280 .financial-summary-row-v280 > input { min-width: 108px; }
+
+  .payment-editor-row[data-v280-payment="1"] { padding: 14px 48px 14px 12px !important; }
+  .payment-editor-row[data-v280-payment="1"] .payment-row-main {
+    grid-template-columns: minmax(0,1fr) 42px !important;
+  }
+  .payment-editor-row[data-v280-payment="1"] .payment-row-main > .field { grid-column: 1 / -1; }
+  .payment-editor-row[data-v280-payment="1"] .payment-row-main > .schedule-payment-v280 { grid-column: 2; }
+  .payment-editor-row[data-v280-payment="1"] .payment-row-main > .due-field { grid-column: 1 / -1; }
+  .payment-editor-row[data-v280-payment="1"] .payment-row-secondary-v280 { grid-template-columns: 1fr !important; }
+  .payment-secondary-left-v280 { grid-template-columns: 1fr !important; }
+  .payment-secondary-left-v280 .fee-field,
+  .payment-secondary-left-v280 .payment-note { grid-column: 1 !important; }
+  .payment-notes-textarea-v280,
+  .payment-notes-standalone-v280 { min-width: 0; width: 100% !important; resize: vertical !important; }
+
+  .osv-form-actions-v280 {
+    flex-wrap: wrap !important;
+    justify-content: flex-end;
+  }
+  .osv-form-actions-v280 .pdf-status-v280 {
+    flex: 1 0 100%;
+    width: 100%;
+    margin: 0 0 2px;
+  }
+  .osv-form-actions-v280 .action-save { margin-left: auto; }
+
+  .inline-information-v280 > strong,
+  .inline-information-v280 > small,
+  .inline-information-v280 > button,
+  .inline-information-v280 > .inline-dot-v280 { display: inline !important; }
+  .order-detail-v280 table { table-layout: auto; }
+  .order-detail-v280 table th:first-child,
+  .order-detail-v280 table td:first-child,
+  .order-detail-v280 table th:not(:first-child),
+  .order-detail-v280 table td:not(:first-child) { width: auto; }
+}
+
+/* v2.8.3 revisão final: responsividade baseada na largura real do módulo,
+   necessária porque Itens e Pagamentos podem ser redimensionados lado a lado. */
+#modal-root form[data-form="order"] .form-section:has(#order-items-editor) {
+  container: osv-items / inline-size;
+}
+#modal-root form[data-form="order"] .form-section:has(#order-payments-editor) {
+  container: osv-payments / inline-size;
+}
+
+@container osv-items (max-width: 900px) {
+  #modal-root form[data-form="order"] .form-section:has(#order-items-editor) .item-editor-head {
+    display: none !important;
+  }
+  #modal-root form[data-form="order"] .form-section:has(#order-items-editor) .item-editor-row,
+  #modal-root form[data-form="order"] .form-section:has(#order-items-editor) .item-editor-row-v280 {
+    display: grid !important;
+    grid-template-columns: 28px minmax(0,1fr) 38px !important;
+    grid-auto-rows: auto;
+    gap: 9px !important;
+    padding: 12px !important;
+    align-items: end;
+  }
+  #modal-root form[data-form="order"] .form-section:has(#order-items-editor) .item-editor-row > * {
+    min-width: 0 !important;
+  }
+  #modal-root form[data-form="order"] .form-section:has(#order-items-editor) .item-reorder-controls {
+    grid-column: 1;
+    grid-row: 1 / span 6;
+    align-self: start;
+  }
+  #modal-root form[data-form="order"] .form-section:has(#order-items-editor) .item-type,
+  #modal-root form[data-form="order"] .form-section:has(#order-items-editor) .item-name,
+  #modal-root form[data-form="order"] .form-section:has(#order-items-editor) .item-qty,
+  #modal-root form[data-form="order"] .form-section:has(#order-items-editor) .item-price,
+  #modal-root form[data-form="order"] .form-section:has(#order-items-editor) .item-subtotal,
+  #modal-root form[data-form="order"] .form-section:has(#order-items-editor) .stock-check {
+    grid-column: 2;
+    width: 100%;
+  }
+  #modal-root form[data-form="order"] .form-section:has(#order-items-editor) [data-action="remove-item-row"] {
+    grid-column: 3;
+    grid-row: 1;
+    justify-self: end !important;
+    align-self: end;
+  }
+}
+
+@container osv-payments (max-width: 900px) {
+  #modal-root form[data-form="order"] .form-section:has(#order-payments-editor) .payment-editor-row[data-v280-payment="1"] {
+    padding: 14px 48px 14px 12px !important;
+  }
+  #modal-root form[data-form="order"] .form-section:has(#order-payments-editor) .payment-row-main {
+    grid-template-columns: minmax(0,1fr) 42px !important;
+    gap: 10px !important;
+  }
+  #modal-root form[data-form="order"] .form-section:has(#order-payments-editor) .payment-row-main > .field:nth-child(1),
+  #modal-root form[data-form="order"] .form-section:has(#order-payments-editor) .payment-row-main > .field:nth-child(2) {
+    grid-column: 1 / -1;
+  }
+  #modal-root form[data-form="order"] .form-section:has(#order-payments-editor) .payment-row-main > .field:nth-child(3) {
+    grid-column: 1;
+  }
+  #modal-root form[data-form="order"] .form-section:has(#order-payments-editor) .payment-row-main > .schedule-payment-v280 {
+    grid-column: 2;
+    align-self: end;
+  }
+  #modal-root form[data-form="order"] .form-section:has(#order-payments-editor) .payment-row-main > .due-field {
+    grid-column: 1 / -1;
+  }
+  #modal-root form[data-form="order"] .form-section:has(#order-payments-editor) .payment-row-secondary-v280,
+  #modal-root form[data-form="order"] .form-section:has(#order-payments-editor) .payment-secondary-left-v280 {
+    grid-template-columns: minmax(0,1fr) !important;
+  }
+  #modal-root form[data-form="order"] .form-section:has(#order-payments-editor) .payment-secondary-left-v280 .fee-field,
+  #modal-root form[data-form="order"] .form-section:has(#order-payments-editor) .payment-secondary-left-v280 .payment-note {
+    grid-column: 1 !important;
+  }
+  #modal-root form[data-form="order"] .form-section:has(#order-payments-editor) .payment-notes-textarea-v280 {
+    min-width: 0 !important;
+    width: 100% !important;
+    resize: vertical !important;
+  }
+}
+
+/* Neutraliza as grades antigas de ações e garante uma única linha no desktop. */
+html body #modal-root .modal form[data-form="order"] > .osv-form-actions.osv-form-actions-v280,
+html body #modal-root .modal.has-docked-actions form[data-form="order"] > .osv-form-actions.osv-form-actions-v280.modal-action-dock.sticky-actions {
+  display: flex !important;
+  grid-template-columns: none !important;
+  grid-auto-flow: initial !important;
+  flex-flow: row nowrap !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 9px !important;
+}
+html body #modal-root .modal form[data-form="order"] > .osv-form-actions.osv-form-actions-v280 > .pdf-status-v280 {
+  flex: 1 1 auto !important;
+  width: auto !important;
+  min-width: 150px !important;
+  grid-column: auto !important;
+  margin: 0 auto 0 0 !important;
+}
+html body #modal-root .modal form[data-form="order"] > .osv-form-actions.osv-form-actions-v280 > .btn.icon-only-v280,
+html body #modal-root .modal form[data-form="order"] > .osv-form-actions.osv-form-actions-v280 > .icon-btn.permanent-delete-v280 {
+  flex: 0 0 44px !important;
+  width: 44px !important;
+  min-width: 44px !important;
+  max-width: 44px !important;
+  height: 42px !important;
+  min-height: 42px !important;
+  padding: 0 !important;
+  white-space: nowrap !important;
+}
+html body #modal-root .modal form[data-form="order"] > .osv-form-actions.osv-form-actions-v280 > .action-cancel,
+html body #modal-root .modal form[data-form="order"] > .osv-form-actions.osv-form-actions-v280 > .action-save {
+  flex: 0 0 auto !important;
+  width: auto !important;
+  min-width: 104px !important;
+  white-space: nowrap !important;
+}
+
+@media (max-width: 760px) {
+  html body #modal-root .modal form[data-form="order"] > .osv-form-actions.osv-form-actions-v280,
+  html body #modal-root .modal.has-docked-actions form[data-form="order"] > .osv-form-actions.osv-form-actions-v280.modal-action-dock.sticky-actions {
+    flex-wrap: wrap !important;
+  }
+  html body #modal-root .modal form[data-form="order"] > .osv-form-actions.osv-form-actions-v280 > .pdf-status-v280 {
+    flex: 1 0 100% !important;
+    width: 100% !important;
+  }
+  html body #modal-root .modal form[data-form="order"] > .osv-form-actions.osv-form-actions-v280 > .action-save {
+    margin-left: auto !important;
+  }
+}
+
+/* Estado condicional deve vencer o display em grade do resumo. */
+.payment-summary-line-v280.is-hidden,
+.payment-summary-line-v280[hidden] {
+  display: none !important;
+}

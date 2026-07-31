@@ -10,12 +10,15 @@
     appId:'marco-iris-tecnologia',
     appName:'Marco Iris Tecnologia',
     dialogTheme:'marco',
+    credentialGroup:'marco-iris-suite',
     isSensitive:value=>!!(value&&typeof value==='object'&&value.appId==='marco-iris-tecnologia'&&value.dataByProfile)
   });
   const IntegrationVault=window.SecureJsonVault.forApp({
     appId:'borion-ecosystem-integration',
     appName:'Integracao segura Borion',
     dialogTheme:'marco',
+    credentialGroup:'marco-iris-suite',
+    autoDownloadRecovery:false,
     isSensitive:value=>!!(value&&typeof value==='object'&&(value.schema==='borion.interop.snapshot'||value.schema==='borion.interop.ack'))
   });
   const DATA_FILE_ID_PREFIX='marco_iris_v240_gdrive_data_file_';
@@ -326,7 +329,7 @@
   }
   async function writeInstallationManifest(rootIdValue,structure,state,user){
     if(!rootIdValue||!structure||!state)return null;
-    const manifest={schema:'marco.iris.installation',schemaVersion:1,appId:'marco-iris-tecnologia',appVersion:'2.7.5',createdOrUpdatedAt:new Date().toISOString(),companyInstanceId:companyIdOf(state),googleAccount:String(user?.email||''),rootFolderId:rootIdValue,folders:Object.fromEntries(Object.entries(FOLDERS).map(([key,name])=>[key,{name,id:structure[key]||''}]))};
+    const manifest={schema:'marco.iris.installation',schemaVersion:1,appId:'marco-iris-tecnologia',appVersion:'2.8.3',createdOrUpdatedAt:new Date().toISOString(),companyInstanceId:companyIdOf(state),googleAccount:String(user?.email||''),rootFolderId:rootIdValue,folders:Object.fromEntries(Object.entries(FOLDERS).map(([key,name])=>[key,{name,id:structure[key]||''}]))};
     const file=await resolveIntegrationFile(rootIdValue,INSTALLATION_FILE,true,manifest);
     await updateJson(file.id,manifest);
     const confirmed=await readJson(file.id);

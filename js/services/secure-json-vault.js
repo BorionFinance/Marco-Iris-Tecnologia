@@ -23,6 +23,15 @@
   const encoder = new TextEncoder();
   const decoder = new TextDecoder('utf-8', { fatal: true });
   const contexts = new Map();
+  // A senha mestra permanece somente na memoria desta aba. Contextos do mesmo
+  // aplicativo (base principal e integracoes) podem reutiliza-la sem abrir
+  // dialogos duplicados. Nada e gravado em localStorage, sessionStorage ou Drive.
+  const credentialSecrets = new Map();
+  const groupLockers = new Map();
+  // Contextos do mesmo grupo também participam da troca de senha. Assim, a base
+  // principal e os arquivos de integração recebem o mesmo novo invólucro antes
+  // de o salvamento confirmado no Drive ser concluído.
+  const groupPasswordRewrappers = new Map();
 
   let secureDialogQueue = Promise.resolve();
   let secureDialogSequence = 0;
@@ -726,7 +735,7 @@
     }
   }
 
-  async function downloadRecovery(appName, appId, recoveryCode, dialogTheme) {
+  async function downloadRecovery(appName, appId, recoveryCode, dialogTheme, options = {}) {
     const text = [
       `${appName} - chave de recuperacao`,
       '',
@@ -747,7 +756,7 @@
       link.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1500);
     } catch (_) {}
-    await secureAlert({ appName, theme: dialogTheme, title: 'Criptografia ativada', message: `Uma chave de recuperação foi baixada.\n\n${recoveryCode}\n\nGuarde-a fora deste computador e fora do Drive do aplicativo.`, submitLabel: 'Entendi', note: false });
+    await secureAlert({ appName, theme: dialogTheme, title: options.title || 'Chave de recuperação salva', message: options.message || `Uma chave de recuperação foi baixada.\n\n${recoveryCode}\n\nGuarde-a fora deste computador e fora do Drive do aplicativo.`, submitLabel: 'Entendi', note: false });
   }
 
   function createContext(options) {
@@ -755,6 +764,8 @@
     const appName = String(options?.appName || appId || 'Aplicativo').trim();
     const isSensitive = typeof options?.isSensitive === 'function' ? options.isSensitive : (() => true);
     const dialogTheme = String(options?.dialogTheme || 'borion').trim().toLowerCase();
+    const credentialGroup = String(options?.credentialGroup || appId).trim() || appId;
+    const autoDownloadRecovery = options?.autoDownloadRecovery !== false;
     if (!appId) fail('SECURE_VAULT_INVALID_APP');
     if (contexts.has(appId)) return contexts.get(appId);
 
@@ -768,6 +779,39 @@
     let unlockVaultId = '';
     let lockGeneration = 0;
     let pendingRecovery = null;
+    const recoveryDeliveryKey = vaultId => `secure-json-vault-recovery-delivered:${appId}:${vaultId}`;
+
+    function rememberCredential(secret) {
+      if (typeof secret === 'string' && secret) credentialSecrets.set(credentialGroup, secret);
+    }
+    function forgetCredential() { credentialSecrets.delete(credentialGroup); }
+    function clearSessionOnly() {
+      lockGeneration += 1;
+      key = null;
+      template = null;
+      plaintextMigrationPending = false;
+      unlockPromise = null;
+      unlockVaultId = '';
+      pendingRecovery = null;
+    }
+    if (!groupLockers.has(credentialGroup)) groupLockers.set(credentialGroup, new Set());
+    groupLockers.get(credentialGroup).add(clearSessionOnly);
+
+    async function rewrapPasswordForGroup(currentPassword, newPassword) {
+      if (!key || !template) return { appId, changed: false, rollback() {} };
+      const previousTemplate = template;
+      const verifiedKey = await unwrapDek(template, currentPassword, 'password');
+      await decryptEnvelope(template, verifiedKey);
+      const wrapped = await wrapDek(key, newPassword, appId, template.vaultId, template.ownerBinding, 'password');
+      template = { ...template, password: wrapped, passwordChangedAt: new Date().toISOString() };
+      return {
+        appId,
+        changed: true,
+        rollback() { template = previousTemplate; }
+      };
+    }
+    if (!groupPasswordRewrappers.has(credentialGroup)) groupPasswordRewrappers.set(credentialGroup, new Set());
+    groupPasswordRewrappers.get(credentialGroup).add(rewrapPasswordForGroup);
 
     async function bindOwner(value) {
       ownerId = String(value || '').trim();
@@ -784,7 +828,8 @@
 
     async function createEnvelope(value) {
       if (!ownerBinding) fail('SECURE_VAULT_OWNER_REQUIRED');
-      const password = await promptNewPassword(appId, appName, dialogTheme);
+      const password = credentialSecrets.get(credentialGroup) || await promptNewPassword(appId, appName, dialogTheme);
+      rememberCredential(password);
       const recoveryCode = generateRecoveryCode();
       const recoverySecret = canonicalRecoveryCode(recoveryCode);
       const vaultId = randomId();
@@ -807,7 +852,7 @@
       const envelope = await updateEnvelope(value);
       // Entrega a chave de recuperação somente depois que o primeiro
       // envelope tiver sido realmente persistido pelo aplicativo.
-      pendingRecovery = { vaultId, recoveryCode };
+      pendingRecovery = autoDownloadRecovery ? { vaultId, recoveryCode } : null;
       if (
         !readBiometricRecord(appId, vaultId)
         && await biometricPlatformAvailable()
@@ -831,7 +876,11 @@
       if (expected && pending.vaultId !== expected) return false;
       if (!template || template.vaultId !== pending.vaultId) return false;
       pendingRecovery = null;
+      let alreadyDelivered = false;
+      try { alreadyDelivered = localStorage.getItem(recoveryDeliveryKey(pending.vaultId)) === '1'; } catch (_) {}
+      if (alreadyDelivered) return false;
       await downloadRecovery(appName, appId, pending.recoveryCode, dialogTheme);
+      try { localStorage.setItem(recoveryDeliveryKey(pending.vaultId), '1'); } catch (_) {}
       return true;
     }
 
@@ -901,6 +950,17 @@
     async function requestUnlock(envelope) {
       if (!ownerBinding) fail('SECURE_VAULT_OWNER_REQUIRED');
       if (envelope.ownerBinding !== ownerBinding) fail('SECURE_VAULT_WRONG_OWNER');
+      const sharedPassword = credentialSecrets.get(credentialGroup);
+      if (sharedPassword) {
+        try {
+          const sharedDek = await unwrapDek(envelope, sharedPassword, 'password');
+          await decryptEnvelope(envelope, sharedDek);
+          return sharedDek;
+        } catch (error) {
+          if (error?.code && !['SECURE_VAULT_AUTHENTICATION_FAILED', 'SECURE_VAULT_INVALID_SECRET'].includes(error.code)) throw error;
+          forgetCredential();
+        }
+      }
       if (readBiometricRecord(appId, envelope.vaultId)) {
         try {
           const biometricDek = await unlockWithBiometric(appId, envelope);
@@ -927,6 +987,7 @@
         if (password === null) fail('SECURE_VAULT_UNLOCK_CANCELLED');
         try {
           const dek = await unwrapDek(envelope, password, 'password');
+          rememberCredential(password);
           if (
             !readBiometricRecord(appId, envelope.vaultId)
             && await biometricPlatformAvailable()
@@ -1038,14 +1099,71 @@
       return JSON.stringify(protectedValue);
     }
 
+    async function changePassword(value, persistCallback) {
+      if (!key || !template) fail('SECURE_VAULT_LOCKED');
+      const currentPassword = await securePrompt({
+        appId, appName, theme: dialogTheme,
+        title: 'Confirmar senha atual',
+        message: 'Digite a senha mestra atual antes de definir uma nova senha.',
+        label: 'Senha mestra atual', placeholder: 'Digite a senha atual',
+        autocomplete: 'current-password', submitLabel: 'Continuar', cancelLabel: 'Cancelar'
+      });
+      if (currentPassword === null) return false;
+      const verifiedKey = await unwrapDek(template, currentPassword, 'password');
+      await decryptEnvelope(template, verifiedKey);
+      const newPassword = await promptNewPassword(appId, appName, dialogTheme);
+      if (newPassword === currentPassword) {
+        await secureAlert({ appName, theme: dialogTheme, title: 'Senha não alterada', message: 'A nova senha deve ser diferente da senha atual.', submitLabel: 'Entendi', note: false });
+        return false;
+      }
+      const previousCredential = credentialSecrets.get(credentialGroup) || '';
+      const rotations = [];
+      try {
+        const rewrappers = groupPasswordRewrappers.get(credentialGroup) || new Set([rewrapPasswordForGroup]);
+        for (const rewrap of rewrappers) rotations.push(await rewrap(currentPassword, newPassword));
+        rememberCredential(newPassword);
+        if (typeof persistCallback === 'function') await persistCallback(value);
+        await secureAlert({ appName, theme: dialogTheme, title: 'Senha mestra alterada', message: 'A nova senha foi aplicada à base e às integrações abertas, e o salvamento criptografado foi confirmado.', submitLabel: 'Concluir', note: false });
+        return true;
+      } catch (error) {
+        rotations.reverse().forEach(rotation => { try { rotation?.rollback?.(); } catch (_) {} });
+        if (previousCredential) rememberCredential(previousCredential); else forgetCredential();
+        throw error;
+      }
+    }
+
+    async function rotateRecovery(value, persistCallback) {
+      if (!key || !template) fail('SECURE_VAULT_LOCKED');
+      const confirmed = await secureConfirm({
+        appName, theme: dialogTheme,
+        title: 'Gerar nova chave de recuperação',
+        message: 'A chave anterior deixará de abrir esta base. Gere a nova chave somente quando puder guardá-la em local seguro.',
+        submitLabel: 'Gerar nova chave', cancelLabel: 'Cancelar', note: false
+      });
+      if (!confirmed) return false;
+      const recoveryCode = generateRecoveryCode();
+      const previousTemplate = template;
+      try {
+        const wrapped = await wrapDek(key, canonicalRecoveryCode(recoveryCode), appId, template.vaultId, template.ownerBinding, 'recovery');
+        template = { ...template, recovery: { ...wrapped, createdAt: new Date().toISOString() } };
+        if (typeof persistCallback === 'function') await persistCallback(value);
+        await downloadRecovery(appName, appId, recoveryCode, dialogTheme, {
+          title: 'Nova chave de recuperação salva',
+          message: `A nova chave foi baixada. A chave anterior não deve mais ser usada.\n\n${recoveryCode}\n\nGuarde este arquivo fora do computador e do Drive do aplicativo.`
+        });
+        try { localStorage.setItem(recoveryDeliveryKey(template.vaultId), '1'); } catch (_) {}
+        return true;
+      } catch (error) {
+        template = previousTemplate;
+        throw error;
+      }
+    }
+
     function lock() {
-      lockGeneration += 1;
-      key = null;
-      template = null;
-      plaintextMigrationPending = false;
-      unlockPromise = null;
-      unlockVaultId = '';
-      pendingRecovery = null;
+      forgetCredential();
+      const lockers = groupLockers.get(credentialGroup);
+      if (lockers) lockers.forEach(clear => { try { clear(); } catch (_) {} });
+      else clearSessionOnly();
     }
 
     const context = Object.freeze({
@@ -1061,6 +1179,8 @@
       needsMigration: () => plaintextMigrationPending,
       markMigrated: () => { plaintextMigrationPending = false; },
       confirmSetupPersisted,
+      changePassword,
+      rotateRecovery,
       lock,
       status: () => ({ appId, ownerBound: !!ownerBinding, unlocked: !!key, migrationPending: plaintextMigrationPending, vaultId: template?.vaultId || '', revision: Number(template?.revision || 0) })
     });

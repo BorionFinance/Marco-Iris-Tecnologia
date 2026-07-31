@@ -14,6 +14,7 @@
     appId:'marco-iris-tecnologia',
     appName:'Marco Iris Tecnologia',
     dialogTheme:'marco',
+    credentialGroup:'marco-iris-suite',
     isSensitive:value=>!!(value&&typeof value==='object'&&value.appId==='marco-iris-tecnologia'&&value.dataByProfile)
   });
   const LEGACY_DATABASES=[

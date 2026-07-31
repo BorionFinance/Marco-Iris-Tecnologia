@@ -1,0 +1,286 @@
+/* Marco Iris Tecnologia v2.8.3 — correções finais após auditoria independente. */
+
+/* Linhas condicionais do resumo devem realmente desaparecer. */
+.order-financial-breakdown-v280 .financial-summary-row-v280[hidden],
+.order-financial-breakdown-v280 .financial-summary-row-v280.is-hidden,
+.order-detail-totals-v280 .financial-summary-row-v280[hidden],
+.order-detail-totals-v280 .financial-summary-row-v280.is-hidden {
+  display: none !important;
+}
+
+/* O layout padrão dos módulos extensos da OSV usa toda a largura. O editor continua livre:
+   esta regra apenas reforça a geometria definida pelo motor de layout. */
+#modal-root form[data-form="order"] [data-osv-component="itemsField"],
+#modal-root form[data-form="order"] [data-osv-component="paymentsField"],
+#modal-root form[data-form="order"] [data-osv-component="photosField"],
+#modal-root form[data-form="order"] [data-osv-component="actionButtons"] {
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
+/* Em desktop largo, a observação é confortável e redimensionável horizontalmente. */
+@media (min-width: 901px) {
+  #modal-root form[data-form="order"] [data-osv-component="paymentsField"] .payment-notes-textarea-v280,
+  #modal-root form[data-form="payment"] .payment-notes-standalone-v280 {
+    resize: horizontal !important;
+    min-width: 260px !important;
+    width: min(100%, 760px) !important;
+    max-width: 100% !important;
+  }
+}
+
+/* Em telas estreitas, nunca há estouro lateral. */
+@media (max-width: 900px) {
+  #modal-root .payment-notes-textarea-v280,
+  #modal-root .payment-notes-standalone-v280 {
+    resize: vertical !important;
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+}
+
+/* Visualizar Cliente: controles dentro do corpo e remoção real do cabeçalho vazio. */
+#modal-root .client-detail-header-removed-v281 > .modal-body {
+  position: relative !important;
+  padding-top: 58px !important;
+}
+#modal-root .modal-floating-controls-v281 {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  z-index: 45;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+#modal-root .modal-floating-controls-v281 > button {
+  position: static !important;
+  inset: auto !important;
+  width: 38px !important;
+  min-width: 38px !important;
+  height: 38px !important;
+  padding: 0 !important;
+  display: grid !important;
+  place-items: center !important;
+  margin: 0 !important;
+}
+
+/* Scroll interno inteligente vence as regras antigas de overflow:hidden. */
+html body #modal-root .modal [data-layout-grid-v256] > [data-layout-item-v256].has-inner-scroll-v280,
+html body #modal-root .modal .detail-grid-v256 > section.card.has-inner-scroll-v280,
+html body #modal-root .modal section.card.has-inner-scroll-v280,
+html body #modal-root .modal .form-section.has-inner-scroll-v280 {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  overscroll-behavior-y: auto !important;
+  scrollbar-gutter: stable;
+}
+html body #modal-root .modal [data-layout-grid-v256] > [data-layout-item-v256].no-inner-scroll-v280,
+html body #modal-root .modal .detail-grid-v256 > section.card.no-inner-scroll-v280,
+html body #modal-root .modal section.card.no-inner-scroll-v280,
+html body #modal-root .modal .form-section.no-inner-scroll-v280 {
+  overflow-x: hidden !important;
+  overscroll-behavior-y: auto !important;
+}
+
+/* Nenhuma janela do sistema deve criar rolagem horizontal. */
+#modal-root,
+#modal-root .modal-backdrop,
+#modal-root .modal,
+#modal-root .modal-body,
+#modal-root [data-layout-grid-v256],
+#modal-root [data-layout-item-v256],
+#modal-root .form-section,
+#modal-root .table-wrap {
+  max-width: 100%;
+  overflow-x: hidden !important;
+}
+
+/* Visualização da OSV: tabela flexível sem perder legibilidade. */
+#modal-root .order-detail-v280 .table-wrap table {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+/* Formulário financeiro avulso: lixeira definitiva no topo direito do bloco. */
+#modal-root form[data-form="payment"] {
+  position: relative;
+  padding-top: 4px;
+}
+#modal-root form[data-form="payment"] > .form-actions .permanent-delete-v280 {
+  position: absolute !important;
+  top: 0 !important;
+  right: 0 !important;
+  width: 42px !important;
+  min-width: 42px !important;
+  height: 42px !important;
+  margin: 0 !important;
+}
+
+
+/* Pagamento avulso: data e agendamento juntos, sem criar uma coluna fantasma. */
+#modal-root form[data-form="payment"] .payment-date-control-v281 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 42px;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+#modal-root form[data-form="payment"] .payment-date-control-v281 > input {
+  min-width: 0;
+  width: 100%;
+}
+#modal-root form[data-form="payment"] .payment-date-control-v281 > .schedule-payment-v280 {
+  width: 42px !important;
+  min-width: 42px !important;
+  height: 42px !important;
+  margin: 0 !important;
+}
+
+
+/* Sem um layout financeiro personalizado salvo, o formulário usa um fluxo compacto e
+   condicional. Ao entrar no Editar Layout, o motor modular volta a assumir o controle. */
+#modal-root .modal:not(.layout-editing-v256) form[data-form="payment"].payment-default-compact-v281 .payment-form-grid {
+  display: grid !important;
+  grid-template-columns: repeat(12, minmax(0, 1fr)) !important;
+  grid-template-rows: none !important;
+  grid-auto-rows: auto !important;
+  grid-auto-flow: row !important;
+  height: auto !important;
+  min-height: 0 !important;
+}
+#modal-root .modal:not(.layout-editing-v256) form[data-form="payment"].payment-default-compact-v281 .payment-form-grid > [data-layout-item-v256] {
+  grid-row: auto !important;
+  order: initial !important;
+  min-height: 0 !important;
+  height: auto !important;
+}
+#modal-root .modal:not(.layout-editing-v256) form[data-form="payment"].payment-default-compact-v281 [data-layout-item-v256="paymentId"],
+#modal-root .modal:not(.layout-editing-v256) form[data-form="payment"].payment-default-compact-v281 [data-layout-item-v256="type"] {
+  grid-column: span 6 !important;
+}
+#modal-root .modal:not(.layout-editing-v256) form[data-form="payment"].payment-default-compact-v281 [data-layout-item-v256="orderId"],
+#modal-root .modal:not(.layout-editing-v256) form[data-form="payment"].payment-default-compact-v281 [data-layout-item-v256="notes"],
+#modal-root .modal:not(.layout-editing-v256) form[data-form="payment"].payment-default-compact-v281 [data-layout-item-v256="cancelled"] {
+  grid-column: 1 / -1 !important;
+}
+#modal-root .modal:not(.layout-editing-v256) form[data-form="payment"].payment-default-compact-v281 [data-layout-item-v256="value"],
+#modal-root .modal:not(.layout-editing-v256) form[data-form="payment"].payment-default-compact-v281 [data-layout-item-v256="paymentMethod"],
+#modal-root .modal:not(.layout-editing-v256) form[data-form="payment"].payment-default-compact-v281 [data-layout-item-v256="paymentDate"],
+#modal-root .modal:not(.layout-editing-v256) form[data-form="payment"].payment-default-compact-v281 [data-layout-item-v256="dueDate"],
+#modal-root .modal:not(.layout-editing-v256) form[data-form="payment"].payment-default-compact-v281 [data-layout-item-v256="fee"],
+#modal-root .modal:not(.layout-editing-v256) form[data-form="payment"].payment-default-compact-v281 [data-layout-item-v256="settlementState"] {
+  grid-column: span 4 !important;
+}
+#modal-root .modal:not(.layout-editing-v256) form[data-form="payment"].payment-default-compact-v281 [data-layout-item-v256="expenseName"],
+#modal-root .modal:not(.layout-editing-v256) form[data-form="payment"].payment-default-compact-v281 [data-layout-item-v256="localPurchase"],
+#modal-root .modal:not(.layout-editing-v256) form[data-form="payment"].payment-default-compact-v281 [data-layout-item-v256="expenseCategory"] {
+  grid-column: span 6 !important;
+}
+#modal-root .modal:not(.layout-editing-v256) form[data-form="payment"].payment-default-compact-v281 [data-layout-item-v256][hidden],
+#modal-root .modal:not(.layout-editing-v256) form[data-form="payment"].payment-default-compact-v281 [data-layout-item-v256].is-hidden,
+#modal-root .modal:not(.layout-editing-v256) form[data-form="payment"].payment-default-compact-v281 .planned-source-v280 {
+  display: none !important;
+}
+@media (max-width: 900px) {
+  #modal-root .modal:not(.layout-editing-v256) form[data-form="payment"].payment-default-compact-v281 .payment-form-grid > [data-layout-item-v256] {
+    grid-column: 1 / -1 !important;
+  }
+}
+
+
+/* Exclusões rápidas alinhadas ao canto superior direito dos respectivos blocos. */
+#modal-root form[data-form="order"] .item-editor-row {
+  position: relative !important;
+  padding-right: 48px !important;
+}
+#modal-root form[data-form="order"] .item-editor-row [data-action="remove-item-row"] {
+  position: absolute !important;
+  top: 8px !important;
+  right: 8px !important;
+  margin: 0 !important;
+}
+#modal-root form[data-form="order"] .payment-editor-row[data-v280-payment="1"] .payment-delete {
+  top: 8px !important;
+  right: 8px !important;
+}
+@media (max-width: 900px) {
+  #modal-root form[data-form="order"] .item-editor-row {
+    padding-right: 54px !important;
+  }
+}
+
+
+/* v2.8.3: a lixeira absoluta não reserva mais uma coluna vazia; o espaço volta para Item. */
+#modal-root form[data-form="order"] .item-editor-row,
+#modal-root form[data-form="order"] .item-editor-row-v280 {
+  grid-template-columns: 24px minmax(82px,.58fr) minmax(300px,2.75fr) 62px minmax(116px,.78fr) minmax(116px,.78fr) 48px !important;
+}
+@media (max-width: 1120px) and (min-width: 761px) {
+  #modal-root form[data-form="order"] .item-editor-row,
+  #modal-root form[data-form="order"] .item-editor-row-v280 {
+    grid-template-columns: 22px minmax(78px,.6fr) minmax(220px,2.25fr) 58px minmax(108px,.78fr) minmax(108px,.78fr) 44px !important;
+  }
+}
+@media (max-width: 760px) {
+  #modal-root form[data-form="order"] .item-editor-row,
+  #modal-root form[data-form="order"] .item-editor-row-v280 {
+    grid-template-columns: 28px minmax(0,1fr) !important;
+  }
+  #modal-root form[data-form="order"] .item-editor-row .field,
+  #modal-root form[data-form="order"] .item-editor-row .money-field,
+  #modal-root form[data-form="order"] .item-editor-row .stock-check {
+    grid-column: 2 !important;
+  }
+  #modal-root form[data-form="order"] .item-editor-row [data-action="remove-item-row"] {
+    grid-column: auto !important;
+    grid-row: auto !important;
+  }
+}
+@container osv-items (max-width: 900px) {
+  #modal-root form[data-form="order"] .form-section:has(#order-items-editor) .item-editor-row,
+  #modal-root form[data-form="order"] .form-section:has(#order-items-editor) .item-editor-row-v280 {
+    grid-template-columns: 28px minmax(0,1fr) !important;
+  }
+  #modal-root form[data-form="order"] .form-section:has(#order-items-editor) .item-type,
+  #modal-root form[data-form="order"] .form-section:has(#order-items-editor) .item-name,
+  #modal-root form[data-form="order"] .form-section:has(#order-items-editor) .item-qty,
+  #modal-root form[data-form="order"] .form-section:has(#order-items-editor) .item-price,
+  #modal-root form[data-form="order"] .form-section:has(#order-items-editor) .item-subtotal,
+  #modal-root form[data-form="order"] .form-section:has(#order-items-editor) .stock-check {
+    grid-column: 2 !important;
+  }
+  #modal-root form[data-form="order"] .form-section:has(#order-items-editor) [data-action="remove-item-row"] {
+    grid-column: auto !important;
+    grid-row: auto !important;
+  }
+}
+
+/* O resumo de lançamento avulso sempre mostra o status, inclusive sem taxa. */
+#modal-root form[data-form="payment"] .payment-summary-v280 [data-payment-summary-status-v280] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* v2.8.3: o rodapé móvel não herda margens negativas das camadas antigas. */
+html body #modal-root .modal form[data-form="order"] > .osv-form-actions.osv-form-actions-v280,
+html body #modal-root .modal.has-docked-actions form[data-form="order"] > .osv-form-actions.osv-form-actions-v280.modal-action-dock.sticky-actions {
+  box-sizing: border-box !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+@media (max-width: 760px) {
+  html body #modal-root .modal form[data-form="order"] > .osv-form-actions.osv-form-actions-v280 > .pdf-status-v280 {
+    min-width: 0 !important;
+  }
+  html body #modal-root .modal form[data-form="order"] > .osv-form-actions.osv-form-actions-v280 > .action-cancel,
+  html body #modal-root .modal form[data-form="order"] > .osv-form-actions.osv-form-actions-v280 > .action-save {
+    flex: 1 1 calc(50% - 6px) !important;
+    width: auto !important;
+    min-width: 0 !important;
+  }
+}
