@@ -1,12 +1,12 @@
 /*
- * Marco Iris Tecnologia v2.8.3
+ * Marco Iris Tecnologia v2.8.4
  * Revisao solicitada pelo Marco: pagamentos, itens, rodape de OSV,
  * separadores, modais, scroll, exclusao definitiva e seguranca do cofre.
  */
 (() => {
   'use strict';
 
-  const VERSION = '2.8.3';
+  const VERSION = '2.8.4';
   const PAYMENT_WITH_FEE = /d[eé]bito|cr[eé]dito|outro/i;
   const PAYMENT_WITHOUT_FEE = /pix|dinheiro|boleto|transfer[eê]ncia/i;
   const parseSequenceV280 = value => Number(String(value || '').match(/(\d+)(?!.*\d)/)?.[1] || 0);
@@ -363,9 +363,9 @@
     if (!actionHost) return;
     const morePayment = q('[data-action="new-payment"]', actionHost);
     if (morePayment) {
-      morePayment.innerHTML = `${icon('plus', 18)} <span>Mais Pagamento</span>`;
-      morePayment.title = 'Mais Pagamento';
-      morePayment.setAttribute('aria-label', 'Mais Pagamento');
+      morePayment.innerHTML = `${icon('plus', 18)} <span>Pagamento</span>`;
+      morePayment.title = 'Pagamento';
+      morePayment.setAttribute('aria-label', 'Pagamento');
     }
     setIconOnly(q('[data-action="generate-pdf"]', actionHost), 'pdf', 'Gerar PDF');
     setIconOnly(q('[data-action="share-order"]', actionHost), 'whatsapp', 'Enviar pelo WhatsApp');

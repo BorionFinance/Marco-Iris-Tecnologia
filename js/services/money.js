@@ -44,8 +44,9 @@
     input.addEventListener('focus',()=>{requestAnimationFrame(()=>input.setSelectionRange(input.value.length,input.value.length));});
     input.addEventListener('keydown',event=>{
       if(event.ctrlKey||event.metaKey||event.altKey||['Tab','Enter','Escape','ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
-      if(/^\d$/.test(event.key)){event.preventDefault();const current=digits(input.value),next=(current==='000'?event.key:current+event.key).replace(/^0+(?=\d)/,'');setCents(input,Number(next)||0,{touch:true});input.dispatchEvent(new Event('input',{bubbles:true}));return;}
-      if(event.key==='Backspace'||event.key==='Delete'){event.preventDefault();const current=digits(input.value),next=current.slice(0,-1);setCents(input,Number(next)||0,{touch:true});input.dispatchEvent(new Event('input',{bubbles:true}));return;}
+      const hasSelection=typeof input.selectionStart==='number'&&typeof input.selectionEnd==='number'&&input.selectionStart!==input.selectionEnd;
+      if(/^\d$/.test(event.key)){event.preventDefault();const current=hasSelection?'':digits(input.value),next=(current===''||current==='000'?event.key:current+event.key).replace(/^0+(?=\d)/,'');setCents(input,Number(next)||0,{touch:true});input.dispatchEvent(new Event('input',{bubbles:true}));return;}
+      if(event.key==='Backspace'||event.key==='Delete'){event.preventDefault();const current=hasSelection?'':digits(input.value),next=hasSelection?'':current.slice(0,-1);setCents(input,Number(next)||0,{touch:true});input.dispatchEvent(new Event('input',{bubbles:true}));return;}
       event.preventDefault();
     });
     input.addEventListener('paste',event=>{event.preventDefault();const text=event.clipboardData?.getData('text')||'';const hasDecimal=/[,.]\d{1,2}\s*$/.test(text)||/R\$/i.test(text);setCents(input,parseToCents(text,{plainDigitsAreCents:!hasDecimal}),{touch:true});input.dispatchEvent(new Event('input',{bubbles:true}));});

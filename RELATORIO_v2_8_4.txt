@@ -1,0 +1,67 @@
+MARCO IRIS TECNOLOGIA — ENTREGA v2.8.4
+Base recebida: v2.8.3
+
+ALTERAÇÕES APLICADAS
+
+1. Cabeçalho das janelas de OSV
+- Botão de editar layout e botão X reposicionados dentro do cabeçalho.
+- Alinhamento corrigido no computador e no celular.
+- Controles não ficam mais flutuando para fora da caixa.
+
+2. Cartão de detalhes da OSV
+- Selos “Concluída” e “Em aberto” reposicionados um pouco mais abaixo.
+- Botão “Mais Pagamento” alterado para “+ Pagamento”.
+
+3. Lista de ordens de serviço
+- Separador grande removido entre equipamento e marca/modelo.
+- Mantido apenas o ponto pequeno “·”.
+
+4. Campos monetários
+- Ao selecionar o valor inteiro e começar a digitar, o valor anterior é substituído.
+- O novo número não é mais anexado ao número antigo.
+
+5. Itens e serviços da Nova/Editar OSV
+- Removido o formulário reduzido “Criar serviço/produto”.
+- Mantido o botão “Adicionar item/serviço”.
+- Adicionado botão “+” ao lado do seletor de cada item.
+- Em Serviço, o “+” abre o cadastro completo de serviço.
+- Em Produto, o “+” abre o cadastro completo de produto.
+- Depois de salvar, a OSV é reaberta e o item novo fica selecionado automaticamente.
+- Rascunho da OSV é preservado durante esse fluxo.
+
+6. Baixa de estoque na OSV
+- Restaurado checkbox de “Baixar estoque”.
+- Adicionado ícone, tooltip e estética padronizada com o sistema.
+
+7. PDF em tempo real
+- Depois que o PDF termina de ser gerado, “Visualizar PDF” é liberado imediatamente.
+- Não é mais necessário fechar e reabrir a OSV.
+
+8. WhatsApp
+- No compartilhamento nativo, o PDF é enviado ao compartilhador do celular e a mensagem fica copiada para colar caso o WhatsApp a ignore.
+- No fallback, a conversa do número cadastrado é aberta com a mensagem e o PDF é baixado para anexação.
+- Limitação técnica real: navegador/PWA não consegue obrigar o WhatsApp a abrir um contato específico e, ao mesmo tempo, anexar automaticamente um arquivo local. Para envio totalmente automático em um clique seria necessário backend e WhatsApp Business Cloud API.
+
+9. Produto novo e despesa do estoque inicial
+- Adicionada opção “Gerar despesa da compra do estoque inicial”.
+- Ao marcar, o sistema abre o lançamento completo de despesa já preenchido.
+- Ao salvar, produto, movimentação de entrada e despesa são gravados e vinculados.
+
+10. Compra de estoque de produto existente
+- Adicionada opção “Gerar despesa desta compra de estoque” nas entradas manuais.
+- A despesa é calculada pelo custo cadastrado × quantidade.
+- Movimentação e despesa ficam vinculadas pelos respectivos IDs.
+
+11. Taxa da maquininha
+- O campo agora recebe “Valor com taxa”, e não mais o valor da taxa.
+- A taxa é calculada automaticamente: valor com taxa − valor líquido.
+- O resumo mostra valor líquido, taxa calculada e valor com taxa.
+
+VALIDAÇÕES EXECUTADAS
+- Verificação de sintaxe em todos os arquivos JavaScript.
+- Teste do campo monetário com seleção total e substituição do valor.
+- Teste do atalho “+” com retorno à OSV e seleção automática do serviço.
+- Teste de criação vinculada: produto + estoque inicial + despesa.
+- Teste de criação vinculada: entrada de estoque existente + despesa.
+- Teste de liberação imediata do botão “Visualizar PDF”.
+- Teste dos ajustes de cabeçalho, selos, checkbox de estoque e cálculo da taxa.
