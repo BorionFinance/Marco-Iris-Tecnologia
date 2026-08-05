@@ -90,6 +90,26 @@
     });
   }
 
+  /* Na ficha do cliente, o botão de editar layout mora numa caixinha de
+     38x38 fixos. Ao entrar/sair do modo de edição o próprio sistema
+     reescreve esse botão com ícone + texto ("Salvar layout"), e o texto
+     não cabe — foi o que espremia tudo ali em cima. Aqui o texto some de
+     novo, sobra só o ícone; a explicação completa continua no title. */
+  function normalizeFloatingLayoutButton(root) {
+    qa('.modal-floating-controls-v281 [data-action="toggle-layout-v256"]', root).forEach(button => {
+      const hasText = [...button.childNodes].some(node => node.nodeType === Node.TEXT_NODE && node.textContent.trim() !== '');
+      if (!hasText) return;
+      const modal = button.closest('.modal');
+      const editing = Boolean(modal?.classList.contains('layout-editing-v256'));
+      [...button.childNodes].forEach(node => {
+        if (node.nodeType === Node.TEXT_NODE) node.remove();
+      });
+      const label = editing ? 'Salvar layout' : 'Editar layout';
+      button.title = label;
+      button.setAttribute('aria-label', label);
+    });
+  }
+
   function apply() {
     if (applying) return;
     applying = true;
@@ -99,6 +119,7 @@
         if (!root) return;
         normalizeText(root);
         ensureDots(root);
+        normalizeFloatingLayoutButton(root);
       });
     } catch (error) {
       console.warn('[v288] separador:', error);
@@ -117,6 +138,7 @@
 
   function start() {
     apply();
+    watchFloatingControls();
     const observer = new MutationObserver(() => schedule());
     ROOTS.forEach(selector => {
       const root = document.querySelector(selector);
@@ -128,6 +150,34 @@
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
   else start();
+
+  /* Ficha do cliente: mede a altura real da barra flutuante (editar/fechar,
+     e a barra de salvar/cancelar quando em edição de layout) e informa ao
+     CSS via variável, para o espaço reservado acima do conteúdo nunca ficar
+     nem curto (sobrepõe) nem exagerado (buraco vazio). */
+  function watchFloatingControls() {
+    if (typeof ResizeObserver === 'undefined') return;
+    const seen = new WeakSet();
+    const observer = new ResizeObserver(entries => {
+      entries.forEach(entry => {
+        const box = entry.target;
+        const modal = box.closest('.modal');
+        if (!modal) return;
+        const height = Math.ceil(box.getBoundingClientRect().height);
+        modal.style.setProperty('--floating-controls-h-v288', `${Math.max(58, height)}px`);
+      });
+    });
+    const attach = () => {
+      qa('.modal-floating-controls-v281').forEach(box => {
+        if (seen.has(box)) return;
+        seen.add(box);
+        observer.observe(box);
+      });
+    };
+    attach();
+    new MutationObserver(schedule2 => attach())
+      .observe(document.body, { childList: true, subtree: true });
+  }
 
   window.MarcoSeparadorV288 = { apply };
 })();

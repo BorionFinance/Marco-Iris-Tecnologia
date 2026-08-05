@@ -222,17 +222,24 @@
     }
     if (due) due.classList.toggle('is-hidden', !planned?.checked);
 
-    if (form.dataset.id && !q('[data-action="delete-payment"]', form)) {
+    if (form.dataset.id && !q('[data-action="delete-payment"]', form.closest('.modal') || form)) {
+      const header = q(':scope > .modal-header', form.closest('.modal'));
       const actions = q(':scope > .form-actions', form);
-      if (actions) {
-        const remove = document.createElement('button');
-        remove.type = 'button';
-        remove.className = 'icon-btn danger permanent-delete-v280';
-        remove.dataset.action = 'delete-payment';
-        remove.dataset.id = form.dataset.id;
-        remove.title = 'Excluir definitivamente';
-        remove.setAttribute('aria-label', 'Excluir definitivamente');
-        remove.innerHTML = icon('trash', 19);
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'icon-btn danger permanent-delete-v280';
+      remove.dataset.action = 'delete-payment';
+      remove.dataset.id = form.dataset.id;
+      remove.title = 'Excluir definitivamente';
+      remove.setAttribute('aria-label', 'Excluir definitivamente');
+      remove.innerHTML = icon('trash', 19);
+      if (header) {
+        /* v2.8.10 — a lixeira mora ao lado do editar/fechar, no cabeçalho da janela. */
+        remove.classList.add('modal-header-delete-v288');
+        const close = q('[data-action="close-modal"]', header);
+        if (close) close.insertAdjacentElement('beforebegin', remove);
+        else header.appendChild(remove);
+      } else if (actions) {
         actions.prepend(remove);
       }
     }
@@ -467,20 +474,9 @@
   }
 
   function patchSeparators(root = document) {
-    qa('.finance-table-v256 tbody tr, [data-view-content="finance"] tbody tr', root).forEach(row => {
-      const cell = row.children?.[3];
-      if (!cell || cell.dataset.v280Separator === '1') return;
-      const client = q('.text-link', cell);
-      const osv = q('.code-link', cell);
-      if (client && osv) {
-        const dot = document.createElement('span');
-        dot.className = 'inline-dot-v280';
-        dot.textContent = '•';
-        client.insertAdjacentElement('afterend', dot);
-        cell.classList.add('inline-information-v280');
-      }
-      cell.dataset.v280Separator = '1';
-    });
+    /* v2.8.10 — a bolinha "•" agora é responsabilidade única do js/v288-...js.
+       Esta função só troca o texto do cabeçalho "Ordens" por "OSVs";
+       inserir o separador aqui também causava bolinha duplicada. */
     qa('.clients-table-v256 thead th', root).forEach(th => {
       const label = qa('span', th).find(span => span.textContent.trim() === 'Ordens');
       if (label) label.textContent = 'OSVs';
@@ -489,31 +485,6 @@
         if (textNode) textNode.textContent = textNode.textContent.replace('Ordens', 'OSVs');
         else th.textContent = th.textContent.replace('Ordens', 'OSVs');
       }
-    });
-    qa('.clients-table-v256 tbody tr', root).forEach(row => {
-      const cell = row.children?.[1];
-      if (!cell || cell.dataset.v280Separator === '1') return;
-      const strong = q(':scope > strong', cell);
-      const small = q(':scope > small.muted', cell);
-      if (strong && small && !/Arquivado/i.test(small.textContent)) {
-        const dot = document.createElement('span');
-        dot.className = 'inline-dot-v280';
-        dot.textContent = '•';
-        strong.insertAdjacentElement('afterend', dot);
-        cell.classList.add('inline-information-v280');
-      }
-      cell.dataset.v280Separator = '1';
-    });
-    qa('tbody td', root).forEach(cell => {
-      if (cell.classList.contains('inline-information-v280')) return;
-      const strong = q(':scope > strong', cell);
-      const small = q(':scope > small.muted', cell);
-      if (!strong || !small || /arquivad|pendente|manual|autom[aá]tica/i.test(small.textContent)) return;
-      const dot = document.createElement('span');
-      dot.className = 'inline-dot-v280';
-      dot.textContent = '•';
-      strong.insertAdjacentElement('afterend', dot);
-      cell.classList.add('inline-information-v280');
     });
   }
 

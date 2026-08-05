@@ -70,22 +70,11 @@
   }
 
   function patchOrderTable(root = document) {
-    /* v2.8.8 — o separador entre equipamento e modelo volta a ser a bolinha "•" com respiro,
-       no mesmo padrão usado no resto do sistema. */
+    /* v2.8.10 — a bolinha "•" é inserida uma única vez pelo js/v288-...js;
+       aqui só normalizamos o texto (sem prefixo antigo em "·"). */
     qa('.osv-table tbody td:nth-child(4)', root).forEach(cell => {
-      const strong = q(':scope > strong', cell);
       const small = q(':scope > small.muted', cell);
       if (small) small.textContent = small.textContent.replace(/^\s*[•●·]\s*/, '').trim();
-      const hasText = small && small.textContent.trim() !== '';
-      qa(':scope > .inline-dot-v280', cell).forEach(dot => { if (!hasText) dot.remove(); });
-      if (strong && hasText && !q(':scope > .inline-dot-v280', cell)) {
-        const dot = document.createElement('span');
-        dot.className = 'inline-dot-v280';
-        dot.textContent = '•';
-        strong.insertAdjacentElement('afterend', dot);
-      }
-      cell.classList.toggle('inline-information-v280', Boolean(strong && hasText));
-      cell.dataset.v280Separator = '1';
     });
   }
 

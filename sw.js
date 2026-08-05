@@ -1,4 +1,4 @@
-const CLOUD_ONLY_VERSION='marco-iris-v2.8.9-rolagem-livre-paineis-auto';
+const CLOUD_ONLY_VERSION='marco-iris-v2.8.10-cabecalhos-lixeira-estoque-quadrado';
 
 self.addEventListener('install',event=>{
   event.waitUntil(self.skipWaiting());

@@ -95,15 +95,16 @@
 #modal-root form[data-form="order"] .stock-check-v284,
 #modal-root form[data-form="order"] #order-items-editor .stock-check,
 #modal-root form[data-form="order"] #order-items-editor .stock-check-v284 {
-  display: grid !important;
-  grid-template-columns: 16px minmax(0, 1fr) !important;
+  display: flex !important;
+  flex-direction: column !important;
   align-items: center !important;
-  justify-content: start !important;
-  gap: 7px !important;
-  width: 124px !important;
-  min-width: 124px !important;
-  min-height: 38px !important;
-  padding: 6px 9px !important;
+  justify-content: center !important;
+  gap: 5px !important;
+  width: 64px !important;
+  min-width: 64px !important;
+  height: 64px !important;
+  min-height: 64px !important;
+  padding: 6px 4px !important;
   border: 1px solid rgba(96, 183, 255, .20) !important;
   border-radius: 12px !important;
   background: rgba(8, 40, 74, .52) !important;
@@ -125,25 +126,14 @@
   cursor: not-allowed;
 }
 
-/* A caixa fica sempre à esquerda e o texto à direita, qualquer que seja a ordem no HTML. */
-#modal-root form[data-form="order"] .stock-check input[type="checkbox"] {
-  grid-column: 1 !important;
-  grid-row: 1 !important;
-  justify-self: center;
-}
-#modal-root form[data-form="order"] .stock-check > span {
-  grid-column: 2 !important;
-  grid-row: 1 !important;
-}
-
 /* A caixa de seleção em si: menor, arredondada e com o "certo" desenhado. */
 #modal-root form[data-form="order"] .stock-check input[type="checkbox"] {
   appearance: none !important;
   -webkit-appearance: none !important;
-  width: 16px !important;
-  height: 16px !important;
-  min-width: 16px !important;
-  min-height: 16px !important;
+  width: 17px !important;
+  height: 17px !important;
+  min-width: 17px !important;
+  min-height: 17px !important;
   margin: 0 !important;
   padding: 0 !important;
   border: 1.5px solid rgba(126, 190, 255, .44) !important;
@@ -165,16 +155,20 @@
   outline-offset: 2px;
 }
 
-/* O texto acompanha a caixa, alinhado à esquerda e sem quebra feia. */
+/* O texto fica embaixo da caixa, centralizado, em duas linhas curtas. */
 #modal-root form[data-form="order"] .stock-check-content-v284 {
-  display: block !important;
-  grid-template-columns: none !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0 !important;
   min-width: 0;
-  font-size: .64rem !important;
+  width: 100%;
+  font-size: .6rem !important;
   font-weight: 700;
-  line-height: 1.15 !important;
+  line-height: 1.12 !important;
   letter-spacing: .01em;
-  text-align: left !important;
+  text-align: center !important;
   color: #b9d3ee;
 }
 #modal-root form[data-form="order"] .stock-check-content-v284 span {
@@ -188,55 +182,48 @@
 }
 /* Marcação antiga (texto quebrado em duas linhas no HTML original). */
 #modal-root form[data-form="order"] .stock-check > span:not(.stock-check-content-v284) {
-  font-size: .64rem !important;
+  font-size: .6rem !important;
   font-weight: 700;
-  line-height: 1.15 !important;
-  text-align: left !important;
+  line-height: 1.12 !important;
+  text-align: center !important;
   color: #b9d3ee;
 }
-#modal-root form[data-form="order"] .stock-check > span br {
-  display: none;
-}
 
-/* A coluna da linha de itens acompanha a nova largura. */
+/* A coluna da linha de itens acompanha a nova largura quadrada. */
 #modal-root form[data-form="order"] #order-items-editor .item-editor-row,
 #modal-root form[data-form="order"] #order-items-editor .item-editor-row-v280 {
-  grid-template-columns: 24px minmax(102px, .68fr) minmax(240px, 2.3fr) 62px minmax(112px, .8fr) minmax(112px, .8fr) 124px 42px !important;
+  grid-template-columns: 24px minmax(102px, .68fr) minmax(240px, 2.3fr) 62px minmax(112px, .8fr) minmax(112px, .8fr) 64px 42px !important;
 }
 
 @media (max-width: 900px) {
-  /* Celular: o campo ocupa a largura útil e a área de toque continua confortável. */
+  /* Celular: o quadrado continua o mesmo, só a área de toque cresce um pouco. */
   #modal-root form[data-form="order"] .stock-check,
   #modal-root form[data-form="order"] .stock-check-v284,
   #modal-root form[data-form="order"] #order-items-editor .stock-check,
   #modal-root form[data-form="order"] #order-items-editor .stock-check-v284 {
-    width: 100% !important;
-    min-width: 0 !important;
-    max-width: 220px !important;
-    min-height: 42px !important;
-    padding: 8px 11px !important;
+    width: 68px !important;
+    min-width: 68px !important;
+    height: 68px !important;
+    min-height: 68px !important;
   }
   #modal-root form[data-form="order"] .stock-check-content-v284 {
-    font-size: .72rem !important;
+    font-size: .64rem !important;
   }
   #modal-root form[data-form="order"] .stock-check input[type="checkbox"] {
-    width: 18px !important;
-    height: 18px !important;
-    min-width: 18px !important;
-    min-height: 18px !important;
-  }
-  #modal-root form[data-form="order"] .stock-check,
-  #modal-root form[data-form="order"] .stock-check-v284 {
-    grid-template-columns: 18px minmax(0, 1fr) !important;
+    width: 19px !important;
+    height: 19px !important;
+    min-width: 19px !important;
+    min-height: 19px !important;
   }
 }
 
 @container osv-items (max-width: 900px) {
   #modal-root form[data-form="order"] .form-section:has(#order-items-editor) .stock-check,
   #modal-root form[data-form="order"] .form-section:has(#order-items-editor) .stock-check-v284 {
-    width: 100% !important;
-    min-width: 0 !important;
-    max-width: 240px !important;
+    width: 68px !important;
+    min-width: 68px !important;
+    height: 68px !important;
+    min-height: 68px !important;
   }
 }
 
@@ -246,10 +233,10 @@
 .inline-dot-v280,
 .inline-dot-v288 {
   display: inline !important;
-  margin: 0 .42rem !important;
+  margin: 0 .3em !important;
   color: var(--muted, #8aa5bf);
   opacity: .85;
-  font-size: .82em;
+  font-size: .78em;
   line-height: 1;
   vertical-align: baseline;
   user-select: none;
@@ -271,13 +258,13 @@
    o CSS garante o espaço e o separador mesmo assim. */
 #root td > strong + small.muted:not([data-dot-v288="span"]),
 #modal-root td > strong + small.muted:not([data-dot-v288="span"]) {
-  margin-left: .38rem;
+  margin-left: .3em;
 }
 
 @media (max-width: 620px) {
   .inline-dot-v280,
   .inline-dot-v288 {
-    margin: 0 .34rem !important;
+    margin: 0 .26em !important;
   }
 }
 
@@ -396,4 +383,128 @@ form[data-layout-key-v256] .layout-grid-v256 > [data-layout-item-v256].has-custo
     grid-row: auto !important;
     min-height: 0 !important;
   }
+}
+
+/* ============================================================
+   6. CABEÇALHO DAS JANELAS — nada mais um em cima do outro
+   ============================================================
+   CAUSA: a barra de "Salvar layout / Cancelar / Restaurar padrão" entrava
+   como mais um item do grid de 3 colunas do cabeçalho, sem linha própria.
+   Dependendo da ordem de inserção, o motor de grade tentava encaixar essa
+   barra na mesma linha do título — e cortava tudo junto.
+   CORREÇÃO: o cabeçalho ganha 2 linhas fixas. Título, editar e fechar
+   sempre na primeira; a barra de salvar/cancelar sempre na segunda,
+   por baixo, nunca por cima de nada. */
+#modal-root .modal-header-v284 {
+  grid-template-rows: auto auto !important;
+  row-gap: 8px !important;
+}
+#modal-root .modal-header-v284 > h2,
+#modal-root .modal-header-v284 .modal-title-v284 {
+  grid-row: 1 !important;
+}
+#modal-root .modal-header-v284 .modal-layout-icon-v280,
+#modal-root .modal-header-v284 .modal-layout-v284,
+#modal-root .modal-header-v284 .modal-close-v280,
+#modal-root .modal-header-v284 .modal-close-v284 {
+  grid-row: 1 !important;
+}
+#modal-root .modal-header-v284 .layout-toolbar-v256 {
+  grid-row: 2 !important;
+  grid-column: 1 / -1 !important;
+  width: 100%;
+}
+#modal-root .modal-header-v284 .layout-toolbar-v256 small {
+  flex-basis: 100%;
+}
+
+/* A lixeira de excluir definitivamente entra como uma quarta coluna,
+   sempre ao lado do editar layout e do fechar — nunca solta no formulário. */
+#modal-root .modal-header-v284:has(.modal-header-delete-v288) {
+  grid-template-columns: minmax(0, 1fr) 40px 40px 40px !important;
+}
+#modal-root .modal-header-v284:has(.modal-header-delete-v288) > h2,
+#modal-root .modal-header-v284:has(.modal-header-delete-v288) .modal-title-v284 {
+  grid-column: 1 !important;
+}
+#modal-root .modal-header-v284 .modal-header-delete-v288 {
+  position: static !important;
+  inset: auto !important;
+  grid-column: 2 !important;
+  grid-row: 1 !important;
+  width: 38px !important;
+  min-width: 38px !important;
+  height: 38px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  place-self: center !important;
+  display: inline-grid !important;
+  place-items: center;
+}
+#modal-root .modal-header-v284:has(.modal-header-delete-v288) .modal-layout-icon-v280,
+#modal-root .modal-header-v284:has(.modal-header-delete-v288) .modal-layout-v284 {
+  grid-column: 3 !important;
+}
+#modal-root .modal-header-v284:has(.modal-header-delete-v288) .modal-close-v280,
+#modal-root .modal-header-v284:has(.modal-header-delete-v288) .modal-close-v284 {
+  grid-column: 4 !important;
+}
+/* Sem editar layout neste cabeçalho: a lixeira fica ao lado do fechar. */
+#modal-root .modal-header-v284:has(.modal-header-delete-v288):not(:has(.modal-layout-v284)):not(:has(.modal-layout-icon-v280)) {
+  grid-template-columns: minmax(0, 1fr) 40px 40px !important;
+}
+#modal-root .modal-header-v284:has(.modal-header-delete-v288):not(:has(.modal-layout-v284)):not(:has(.modal-layout-icon-v280)) .modal-header-delete-v288 {
+  grid-column: 2 !important;
+}
+#modal-root .modal-header-v284:has(.modal-header-delete-v288):not(:has(.modal-layout-v284)):not(:has(.modal-layout-icon-v280)) .modal-close-v280,
+#modal-root .modal-header-v284:has(.modal-header-delete-v288):not(:has(.modal-layout-v284)):not(:has(.modal-layout-icon-v280)) .modal-close-v284 {
+  grid-column: 3 !important;
+}
+@media (max-width: 760px) {
+  #modal-root .modal-header-v284:has(.modal-header-delete-v288) {
+    grid-template-columns: minmax(0, 1fr) 38px 38px 38px !important;
+  }
+  #modal-root .modal-header-v284:has(.modal-header-delete-v288):not(:has(.modal-layout-v284)):not(:has(.modal-layout-icon-v280)) {
+    grid-template-columns: minmax(0, 1fr) 38px 38px !important;
+  }
+  #modal-root .modal-header-v284 .modal-header-delete-v288 {
+    width: 36px !important;
+    min-width: 36px !important;
+    height: 36px !important;
+  }
+}
+
+/* ============================================================
+   7. FICHA DO CLIENTE (cabeçalho removido) — barra de layout
+   sem sobrepor o nome do cliente
+   ============================================================
+   Nesta janela o cabeçalho de verdade é removido e editar/fechar viram
+   dois botões flutuando no canto. Ao entrar no modo de edição de layout,
+   a barra de salvar/cancelar entrava dentro dessa mesma caixinha pequena
+   e ficava por cima do nome do cliente. Agora a caixinha vira uma barra
+   inteira no topo enquanto edita, e o espaço reservado acima do conteúdo
+   cresce para caber ela — a altura real é medida pelo
+   js/v288-rolagem-bolinha-estoque.js. */
+#modal-root .client-detail-header-removed-v281 > .modal-body {
+  padding-top: calc(var(--floating-controls-h-v288, 58px) + 14px) !important;
+  transition: padding-top .12s ease;
+}
+#modal-root .modal-floating-controls-v281 {
+  max-width: calc(100% - 32px);
+  flex-wrap: wrap !important;
+  justify-content: flex-end !important;
+  row-gap: 8px;
+}
+#modal-root .modal-floating-controls-v281 .layout-toolbar-v256 {
+  order: 5;
+  width: 100%;
+  flex-wrap: wrap;
+  justify-content: flex-end !important;
+  margin: 0 !important;
+}
+#modal-root .modal-floating-controls-v281 .layout-toolbar-v256 small {
+  flex-basis: 100%;
+  max-width: 100% !important;
+  text-align: right;
+  white-space: normal !important;
 }

@@ -102,20 +102,8 @@ html body #modal-root .modal .form-section.no-inner-scroll-v280 {
   max-width: 100% !important;
 }
 
-/* Formulário financeiro avulso: lixeira definitiva no topo direito do bloco. */
-#modal-root form[data-form="payment"] {
-  position: relative;
-  padding-top: 4px;
-}
-#modal-root form[data-form="payment"] > .form-actions .permanent-delete-v280 {
-  position: absolute !important;
-  top: 0 !important;
-  right: 0 !important;
-  width: 42px !important;
-  min-width: 42px !important;
-  height: 42px !important;
-  margin: 0 !important;
-}
+/* Formulário financeiro avulso: a lixeira agora vive no cabeçalho da janela
+   (ver css/v288-rolagem-bolinha-estoque.css), não mais flutuando sobre o formulário. */
 
 
 /* Pagamento avulso: data e agendamento juntos, sem criar uma coluna fantasma. */
