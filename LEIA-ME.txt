@@ -1,0 +1,13 @@
+MARCO IRIS v2.8.6 — DESEMPENHO CORRIGIDO
+
+CORREÇÕES PRINCIPAIS
+- Removido o empacotamento que armazenava 25 módulos como texto dentro de um JS gigante.
+- Núcleo dividido em 3 scripts clássicos consolidados, preservando a ordem e os globais.
+- Eliminada a análise dupla do JavaScript no carregamento.
+- Observadores de DOM limitados às áreas reais do aplicativo.
+- Removidos observadores individuais por cartão/campo de modal.
+- Escritas repetidas de innerHTML/textContent tornadas idempotentes.
+- Redução automática de blur, sombras e animações em celulares/dispositivos modestos.
+- PWA e cache atualizados para v2.8.6.
+
+ARQUIVOS: 13 itens úteis, sem relatórios antigos, testes ou módulos não carregados.
