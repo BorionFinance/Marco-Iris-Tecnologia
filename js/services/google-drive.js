@@ -331,7 +331,7 @@
   }
   async function writeInstallationManifest(rootIdValue,structure,state,user){
     if(!rootIdValue||!structure||!state)return null;
-    const manifest={schema:'marco.iris.installation',schemaVersion:1,appId:'marco-iris-tecnologia',appVersion:window.MARCO_APP_VERSION||'2.8.12',createdOrUpdatedAt:new Date().toISOString(),companyInstanceId:companyIdOf(state),googleAccount:String(user?.email||''),rootFolderId:rootIdValue,folders:Object.fromEntries(Object.entries(FOLDERS).map(([key,name])=>[key,{name,id:structure[key]||''}]))};
+    const manifest={schema:'marco.iris.installation',schemaVersion:1,appId:'marco-iris-tecnologia',appVersion:window.MARCO_APP_VERSION||'2.8.13',createdOrUpdatedAt:new Date().toISOString(),companyInstanceId:companyIdOf(state),googleAccount:String(user?.email||''),rootFolderId:rootIdValue,folders:Object.fromEntries(Object.entries(FOLDERS).map(([key,name])=>[key,{name,id:structure[key]||''}]))};
     const file=await resolveIntegrationFile(rootIdValue,INSTALLATION_FILE,true,manifest);
     await updateJson(file.id,manifest);
     const confirmed=await readJson(file.id);
@@ -587,8 +587,25 @@
     async folderStatus(){const {structure}=await this.ensureConnection(false);return Object.entries(FOLDERS).map(([key,name])=>({key,name,id:structure[key],url:`https://drive.google.com/drive/folders/${structure[key]}`}));},
     /* BORION INTEROP v1.0.0 — protected transport seam. */
     async integrationFolderId(){const {structure}=await this.ensureConnection(false);return structure.integration;},
-    async writeIntegrationJson(name,obj){const folderId=await this.integrationFolderId();const f=await resolveIntegrationFile(folderId,name,true,obj);const result=await updateJson(f.id,await IntegrationVault.protect(obj));await IntegrationVault.confirmSetupPersisted?.(IntegrationVault.status?.().vaultId||'');if(IntegrationVault.needsMigration())IntegrationVault.markMigrated();return result;},
-    async readIntegrationJson(name){const folderId=await this.integrationFolderId();const f=await resolveIntegrationFile(folderId,name,false,null);if(!f)return null;const r=await fetch(`https://www.googleapis.com/drive/v3/files/${f.id}?alt=media`,{headers:await headers()});if(!r.ok)throw new Error('Falha ao carregar a integração do Google Drive.');const value=await IntegrationVault.open(await r.json());if(IntegrationVault.needsMigration()){await updateJson(f.id,await IntegrationVault.protect(value));await IntegrationVault.confirmSetupPersisted?.(IntegrationVault.status?.().vaultId||'');IntegrationVault.markMigrated();}return value;},
+    /* V2.8.13 — INTEROP EM TEXTO CLARO (bridge + ack).
+       Estes dois arquivos são escritos por um aplicativo e lidos por OUTRO
+       (Marco Iris <-> Borion Finance). Cada lado cifrava com uma chave própria
+       do seu próprio cofre, então o outro lado nunca conseguia abrir o arquivo:
+       o Borion caía no pedido de "senha mestra" (que nunca abriria nada, porque
+       a chave é derivada da conta Google desta instalação) e o Marco não
+       conseguia ler o ack de volta.
+       Agora o bridge e o ack trafegam como JSON normal. Eles ficam dentro da
+       pasta do Drive, já protegida pela conta Google e pelo escopo drive.file.
+       A BASE do aplicativo (marco-iris-tecnologia) continua cifrada como antes —
+       só o canal de integração deixou de ser cifrado, porque é justamente o
+       único arquivo que precisa ser lido por um app diferente. */
+    async writeIntegrationJson(name,obj){const folderId=await this.integrationFolderId();const f=await resolveIntegrationFile(folderId,name,true,obj);return await updateJson(f.id,obj);},
+    /* Leitura tolerante: JSON normal abre direto. Envelope antigo é aberto
+       apenas se a chave desta instalação servir, e SEM nunca perguntar nada
+       (interactive:false). Se não servir, devolve null em vez de travar — a
+       próxima publicação regrava o arquivo em texto claro e a integração
+       volta a fluir sozinha. */
+    async readIntegrationJson(name){const folderId=await this.integrationFolderId();const f=await resolveIntegrationFile(folderId,name,false,null);if(!f)return null;const r=await fetch(`https://www.googleapis.com/drive/v3/files/${f.id}?alt=media`,{headers:await headers()});if(!r.ok)throw new Error('Falha ao carregar a integração do Google Drive.');const raw=await r.json();if(!IntegrationVault.isEnvelope?.(raw))return raw;try{const value=await IntegrationVault.open(raw,{interactive:false});await updateJson(f.id,value);return value;}catch(e){console.warn('[GoogleDriveMarco] arquivo de integração antigo cifrado por outra instalação; será regravado em texto claro na próxima publicação:',e&&e.code||e);return null;}},
     async writeBackupJson(name,obj){const {structure}=await this.ensureConnection(false);const safeName=String(name||`backup-${stamp()}.json`).replace(/[\\/:*?"<>|]/g,'-');const f=await createMetadata({name:safeName,mimeType:'application/json',parents:[structure.backups]});await updateJson(f.id,obj);const confirmed=await readJson(f.id);return {file:f,state:confirmed};},
     enqueueSave,flushSaveQueue,
     async writeAutosave(state,{force=false}={}){const {structure}=await this.ensureConnection(false);return await writeRotatingBackup(structure.backups,state,{kind:'autosave',force});},

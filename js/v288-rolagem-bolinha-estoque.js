@@ -1,4 +1,4 @@
-/* Marco Iris Tecnologia v2.8.12
+/* Marco Iris Tecnologia v2.8.13
    Normalização leve de separadores, botões de layout e rodapé da OSV.
    Processa somente os nós alterados, sem varrer o aplicativo inteiro a cada mutação. */
 (() => {
@@ -143,7 +143,7 @@
       normalizeIconButtons(root);
       observeFloatingControls(root);
     } catch (error) {
-      console.warn('[v2.8.12] normalização visual:', error);
+      console.warn('[v2.8.13] normalização visual:', error);
     } finally {
       applying = false;
     }

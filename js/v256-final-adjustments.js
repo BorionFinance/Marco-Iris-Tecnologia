@@ -5,7 +5,7 @@
  * somente apresentação, filtros, cliques e personalização visual.
  */
 (() => {
-  const VERSION=window.MARCO_APP_VERSION||'2.8.12';
+  const VERSION=window.MARCO_APP_VERSION||'2.8.13';
   const ORDER_STATUSES=['Orçamento','Em andamento','Aguardando peça','Concluída','Cancelada'];
   const INTERACTIVE_SELECTOR='button,a,input,select,textarea,label,summary,details,[role="button"],[contenteditable="true"]';
   const ENTITY_EDIT_ACTION={service:'edit-service',product:'edit-product',supply:'edit-supply',movement:'edit-stock-movement'};

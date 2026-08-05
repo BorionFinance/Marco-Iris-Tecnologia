@@ -1,4 +1,4 @@
-const CLOUD_ONLY_VERSION='marco-iris-v2.8.12-refinamento-geral';
+const CLOUD_ONLY_VERSION='marco-iris-v2.8.13-interop-texto-claro';
 
 self.addEventListener('install',event=>{
   event.waitUntil(self.skipWaiting());

@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION=window.MARCO_APP_VERSION||'2.8.12';
+const APP_VERSION=window.MARCO_APP_VERSION||'2.8.13';
 
 let STATE=null;
 let CURRENT_VIEW='dashboard';
