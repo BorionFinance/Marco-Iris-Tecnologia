@@ -1,5 +1,7 @@
 'use strict';
 
+const APP_VERSION=window.MARCO_APP_VERSION||'2.8.12';
+
 let STATE=null;
 let CURRENT_VIEW='dashboard';
 let SEARCH='';
@@ -525,14 +527,14 @@ function startLockNetwork(){
 
   const reduced=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const lowPower=window.innerWidth<760||((navigator.hardwareConcurrency||8)<=4)||((navigator.deviceMemory||8)<=4);
-  const frameInterval=1000/(lowPower?30:60);
+  const frameInterval=1000/30;
   const state={
     canvas,ctx,points:[],raf:0,resizeHandler:null,visibilityHandler:null,
     dpr:1,width:0,height:0,lastTime:0,lastDraw:0,running:false,maxDist:0
   };
 
   const createPoints=()=>{
-    const count=window.innerWidth<680?20:window.innerWidth<1100?30:42;
+    const count=window.innerWidth<680?14:window.innerWidth<1100?24:32;
     const speed=lowPower?0.17:0.22;
     state.points=Array.from({length:count},(_,i)=>({
       x:Math.random()*state.width,
@@ -617,7 +619,7 @@ function startLockNetwork(){
   };
 
   const startLoop=()=>{
-    if(reduced||state.running||document.hidden)return;
+    if(reduced||lowPower||state.running||document.hidden)return;
     state.running=true;
     state.lastTime=0;
     state.lastDraw=0;
@@ -836,7 +838,7 @@ function renderLogin(entry=''){
         <div class="lock-feature"><div class="lock-feature-icon">${icon('cloud')}</div><div><strong>Soluções em nuvem</strong><small>Fotos, PDFs, anexos e dados organizados no Google Drive.</small></div></div>
       </div>
     </section>
-    <footer class="lock-footer"><div class="lock-footer-cards"><div class="lock-footer-card"><strong><span class="status-dot-live"></span> Sistema operacional</strong><small>Interface pronta para uso.</small></div><div class="lock-footer-card"><strong>${icon('cloud')} Google Drive e backups</strong><small>Dados e arquivos em pastas separadas.</small></div><div class="lock-footer-card"><strong>${icon('download')} Aplicativo PWA</strong><small>Instalação no computador e celular.</small></div></div><div class="lock-footer-meta"><strong>Marco Iris Tecnologia © 2026</strong><span>v2.8.7</span></div></footer>
+    <footer class="lock-footer"><div class="lock-footer-cards"><div class="lock-footer-card"><strong><span class="status-dot-live"></span> Sistema operacional</strong><small>Interface pronta para uso.</small></div><div class="lock-footer-card"><strong>${icon('cloud')} Google Drive e backups</strong><small>Dados e arquivos em pastas separadas.</small></div><div class="lock-footer-card"><strong>${icon('download')} Aplicativo PWA</strong><small>Instalação no computador e celular.</small></div></div><div class="lock-footer-meta"><strong>Marco Iris Tecnologia © 2026</strong><span>v${APP_VERSION}</span></div></footer>
   </main>`;
   startLockNetwork();
 }
@@ -1316,7 +1318,7 @@ async function handleAction(btn){
 }
 
 window.MarcoOptimisticDeleteV266={
-  version:'2.8.7',
+  version:APP_VERSION,
   pendingCount:()=>PENDING_PAYMENT_DELETIONS.size,
   pendingIds:()=>[...PENDING_PAYMENT_DELETIONS.values()].map(item=>item.id),
   apply:()=>applyPendingPaymentDeletions(STATE),
@@ -1399,7 +1401,7 @@ async function boot(){
   if(!navigator.onLine){renderCloudRequired();return;}
   renderLogin();
   if('serviceWorker' in navigator){
-    navigator.serviceWorker.register('./sw.js?v=2.8.7').then(reg=>reg?.update?.()).catch(e=>console.warn('Service worker:',e));
+    navigator.serviceWorker.register(`./sw.js?v=${APP_VERSION}`).then(reg=>reg?.update?.()).catch(e=>console.warn('Service worker:',e));
   }
   window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();window.__installPrompt=e;});
   window.addEventListener('offline',()=>renderCloudRequired('A internet caiu. O aplicativo foi bloqueado para evitar qualquer alteração fora do Google Drive.'));

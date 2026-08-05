@@ -1,0 +1,35 @@
+MARCO IRIS TECNOLOGIA — v2.8.12
+
+REFINAMENTO GERAL
+
+INTERFACE
+- Cabeçalhos das janelas reorganizados: título à esquerda e ações alinhadas no canto superior direito, no padrão de janelas do Windows.
+- Controles de Restaurar padrão, Cancelar, excluir, salvar layout e fechar sem sobreposição ou desalinhamento.
+- Botões de editar/salvar layout mantidos somente como ícones, com title e aria-label.
+- Controle “Baixar estoque” convertido em checkbox padrão, compacto e horizontal, com o texto ao lado no computador e no celular.
+- Botão “Gerar PDF” no rodapé reduzido ao ícone; ação, title, aria-label e estado de carregamento preservados.
+- Rodapé da OSV reconstruído sem margens negativas, cortes ou rolagem horizontal, com acabamento uniforme e quebra responsiva no celular.
+
+VERSÃO E CACHE
+- Versão visível da tela de login atualizada para v2.8.12.
+- Manifest, service worker, cache, integração Borion e metadados internos sincronizados pela constante MARCO_APP_VERSION.
+- Cache do PWA renovado para impedir que a interface antiga continue aparecendo após a publicação.
+
+DESEMPENHO E LIMPEZA
+- Canvas decorativo do login ficou estático em celulares, dispositivos de baixo consumo e modo de redução de movimento; desktop limitado a 30 FPS.
+- Quantidade de partículas reduzida sem retirar a identidade visual.
+- Observadores de alterações do DOM reescritos para processar somente elementos novos ou alterados, eliminando varreduras integrais repetidas do aplicativo.
+- Contenção de pintura aplicada em listas e cartões extensos para reduzir repintura durante o scroll.
+- Removidos arquivos pesados ou antigos sem qualquer referência ativa: borion-emblem.png, borion.ico, marco-banner.jpg, icon-512-maskable.png, favicon-32.png e relatórios antigos.
+- Pacote final: 54 arquivos e aproximadamente 1,6 MB de conteúdo, sem contar a compactação ZIP.
+
+VALIDAÇÃO
+- Sintaxe verificada em todos os arquivos JavaScript.
+- Manifest JSON validado.
+- Testes automatizados de abertura e layout executados em desktop e celular para login, cliente, lançamento/pagamento e edição de OSV.
+- Sem estouro horizontal nos modais testados.
+- Botão de PDF confirmado sem texto visível e com ação original preservada.
+- Integrações, estrutura de dados, criptografia, Google Drive, OSVs, clientes, pagamentos, PDFs e integração Borion foram preservadas no código.
+
+OBSERVAÇÃO
+- O teste visual automatizado foi feito sem uma conta Google real conectada. Por isso, a gravação completa ao vivo no Google Drive deve ser confirmada após a publicação usando a conta do Marco.

@@ -4,7 +4,7 @@
  * Camada integrada de regras, telas e migração. Executada antes do boot.
  */
 (() => {
-  const PTS_VERSION = '2.8.7';
+  const PTS_VERSION = window.MARCO_APP_VERSION||'2.8.12';
   const OPERATIONAL_STATUSES = ['Orçamento','Em andamento','Aguardando peça','Concluída','Cancelada'];
   const PAYMENT_METHODS = ['Pix','Dinheiro','Débito','Crédito (À vista)','Crédito 2x','Crédito 3x','Crédito 4x','Crédito 5x','Crédito 6x','Crédito 7x','Crédito 8x','Crédito 9x','Crédito 10x','Crédito 11x','Crédito 12x','Boleto','Transferência','Outro'];
   const EQUIPMENT_TYPES = ['Computador Gamer','Computador de Escritório','Notebook Gamer','Notebook','Celular','Monitor','Impressora','Console','Game Stick','Rack','Teclado','Roteador','Mouse'];
@@ -1802,7 +1802,7 @@
     if(box){box.dataset.pdfState=state;box.setAttribute('aria-busy',state==='generating'?'true':'false');}
     const labels={idle:'Gere o PDF quando a OSV estiver pronta.',dirty:'PDF desatualizado — gere novamente.',generating:'Gerando PDF…',ready:'PDF pronto',error:'Não foi possível gerar o PDF.'};
     if(text)text.textContent=message||labels[state]||labels.idle;
-    if(button){button.disabled=state==='generating';button.setAttribute('aria-busy',state==='generating'?'true':'false');button.innerHTML=state==='generating'?`<span class="pdf-button-spinner" aria-hidden="true"></span><span>Gerando PDF…</span>`:`${icon('pdf')} <span>Gerar PDF</span>`;}
+    if(button){const generating=state==='generating';button.disabled=generating;button.setAttribute('aria-busy',generating?'true':'false');button.title=generating?'Gerando PDF…':'Gerar PDF';button.setAttribute('aria-label',button.title);button.innerHTML=generating?`<span class="pdf-button-spinner" aria-hidden="true"></span>`:`${icon('pdf')}`;}
   }
   function markOrderPdfDirty219(form){
     if(!form||ORDER_DRAFT_RESTORING_219||form.dataset.pdfState==='generating')return;

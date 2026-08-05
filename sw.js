@@ -1,4 +1,4 @@
-const CLOUD_ONLY_VERSION='marco-iris-v2.8.11-cabecalho-ordem-pagamentos-rodape';
+const CLOUD_ONLY_VERSION='marco-iris-v2.8.12-refinamento-geral';
 
 self.addEventListener('install',event=>{
   event.waitUntil(self.skipWaiting());

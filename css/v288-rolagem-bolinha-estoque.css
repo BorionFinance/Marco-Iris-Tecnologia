@@ -89,90 +89,85 @@
 }
 
 /* ============================================================
-   2. BAIXAR ESTOQUE — caixa menor, sem ícone, texto ao lado
+   2. BAIXAR ESTOQUE — checkbox padrão, compacto e horizontal
    ============================================================ */
 #modal-root form[data-form="order"] .stock-check,
 #modal-root form[data-form="order"] .stock-check-v284,
 #modal-root form[data-form="order"] #order-items-editor .stock-check,
 #modal-root form[data-form="order"] #order-items-editor .stock-check-v284 {
-  display: flex !important;
-  flex-direction: column !important;
+  display: inline-flex !important;
+  flex-direction: row !important;
   align-items: center !important;
-  justify-content: center !important;
-  gap: 5px !important;
-  width: 64px !important;
-  min-width: 64px !important;
-  height: 64px !important;
-  min-height: 64px !important;
-  padding: 6px 4px !important;
-  border: 1px solid rgba(96, 183, 255, .20) !important;
-  border-radius: 12px !important;
-  background: rgba(8, 40, 74, .52) !important;
+  justify-content: flex-start !important;
+  gap: 7px !important;
+  width: auto !important;
+  min-width: 112px !important;
+  max-width: 128px !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  padding: 0 7px !important;
+  margin: 0 !important;
+  border: 1px solid rgba(96, 183, 255, .16) !important;
+  border-radius: 8px !important;
+  background: rgba(8, 40, 74, .22) !important;
+  box-shadow: none !important;
   cursor: pointer;
-  transition: border-color .16s ease, background .16s ease, box-shadow .16s ease;
+  white-space: nowrap !important;
+  justify-self: start !important;
+  align-self: end !important;
+  transition: border-color .16s ease, background .16s ease;
 }
 #modal-root form[data-form="order"] .stock-check:hover {
-  border-color: rgba(96, 183, 255, .38) !important;
-  background: rgba(11, 52, 94, .66) !important;
+  border-color: rgba(96, 183, 255, .28) !important;
+  background: rgba(11, 52, 94, .32) !important;
 }
-/* Marcado: fica verde-água, o mesmo verde de confirmação do sistema. */
 #modal-root form[data-form="order"] .stock-check:has(input:checked) {
-  border-color: rgba(39, 215, 161, .52) !important;
-  background: rgba(18, 100, 78, .30) !important;
-  box-shadow: inset 0 0 0 1px rgba(39, 215, 161, .16);
+  border-color: rgba(39, 215, 161, .34) !important;
+  background: rgba(18, 100, 78, .20) !important;
+  box-shadow: none !important;
 }
 #modal-root form[data-form="order"] .stock-check:has(input:disabled) {
   opacity: .45;
   cursor: not-allowed;
 }
-
-/* A caixa de seleção em si: menor, arredondada e com o "certo" desenhado. */
 #modal-root form[data-form="order"] .stock-check input[type="checkbox"] {
-  appearance: none !important;
-  -webkit-appearance: none !important;
-  width: 17px !important;
-  height: 17px !important;
-  min-width: 17px !important;
-  min-height: 17px !important;
+  appearance: auto !important;
+  -webkit-appearance: checkbox !important;
+  width: 16px !important;
+  min-width: 16px !important;
+  height: 16px !important;
+  min-height: 16px !important;
   margin: 0 !important;
   padding: 0 !important;
-  border: 1.5px solid rgba(126, 190, 255, .44) !important;
-  border-radius: 5px !important;
-  background: rgba(3, 20, 40, .72) !important;
-  background-repeat: no-repeat !important;
-  background-position: center !important;
-  background-size: 11px 11px !important;
+  border: 0 !important;
+  border-radius: 3px !important;
+  background: none !important;
+  background-image: none !important;
+  accent-color: #27d7a1;
   cursor: inherit;
-  transition: background-color .16s ease, border-color .16s ease;
-}
-#modal-root form[data-form="order"] .stock-check input[type="checkbox"]:checked {
-  border-color: #27d7a1 !important;
-  background-color: #1fbf8d !important;
-  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E") !important;
 }
 #modal-root form[data-form="order"] .stock-check input[type="checkbox"]:focus-visible {
   outline: 2px solid rgba(79, 165, 255, .7);
   outline-offset: 2px;
 }
-
-/* O texto fica embaixo da caixa, centralizado, em duas linhas curtas. */
 #modal-root form[data-form="order"] .stock-check-content-v284 {
-  display: flex !important;
-  flex-direction: column !important;
+  display: inline-flex !important;
+  flex-direction: row !important;
   align-items: center !important;
-  justify-content: center !important;
+  justify-content: flex-start !important;
   gap: 0 !important;
-  min-width: 0;
-  width: 100%;
-  font-size: .6rem !important;
+  width: auto !important;
+  min-width: 0 !important;
+  font-size: .66rem !important;
   font-weight: 700;
-  line-height: 1.12 !important;
+  line-height: 1 !important;
   letter-spacing: .01em;
-  text-align: center !important;
+  text-align: left !important;
   color: #b9d3ee;
+  white-space: nowrap !important;
 }
 #modal-root form[data-form="order"] .stock-check-content-v284 span {
-  display: block;
+  display: inline !important;
 }
 #modal-root form[data-form="order"] .stock-check-content-v284 svg {
   display: none !important;
@@ -180,50 +175,38 @@
 #modal-root form[data-form="order"] .stock-check:has(input:checked) .stock-check-content-v284 {
   color: #b8f2dd;
 }
-/* Marcação antiga (texto quebrado em duas linhas no HTML original). */
 #modal-root form[data-form="order"] .stock-check > span:not(.stock-check-content-v284) {
-  font-size: .6rem !important;
+  font-size: .66rem !important;
   font-weight: 700;
-  line-height: 1.12 !important;
-  text-align: center !important;
+  line-height: 1 !important;
+  text-align: left !important;
   color: #b9d3ee;
+  white-space: nowrap !important;
 }
-
-/* A coluna da linha de itens acompanha a nova largura quadrada. */
 #modal-root form[data-form="order"] #order-items-editor .item-editor-row,
 #modal-root form[data-form="order"] #order-items-editor .item-editor-row-v280 {
-  grid-template-columns: 24px minmax(102px, .68fr) minmax(240px, 2.3fr) 62px minmax(112px, .8fr) minmax(112px, .8fr) 64px 42px !important;
+  grid-template-columns: 24px minmax(102px, .68fr) minmax(240px, 2.3fr) 62px minmax(112px, .8fr) minmax(112px, .8fr) 118px 42px !important;
 }
-
 @media (max-width: 900px) {
-  /* Celular: o quadrado continua o mesmo, só a área de toque cresce um pouco. */
-  #modal-root form[data-form="order"] .stock-check,
-  #modal-root form[data-form="order"] .stock-check-v284,
+  #modal-root form[data-form="order"] .form-section:has(#order-items-editor) .stock-check,
+  #modal-root form[data-form="order"] .form-section:has(#order-items-editor) .stock-check-v284,
   #modal-root form[data-form="order"] #order-items-editor .stock-check,
   #modal-root form[data-form="order"] #order-items-editor .stock-check-v284 {
-    width: 68px !important;
-    min-width: 68px !important;
-    height: 68px !important;
-    min-height: 68px !important;
-  }
-  #modal-root form[data-form="order"] .stock-check-content-v284 {
-    font-size: .64rem !important;
-  }
-  #modal-root form[data-form="order"] .stock-check input[type="checkbox"] {
-    width: 19px !important;
-    height: 19px !important;
-    min-width: 19px !important;
-    min-height: 19px !important;
+    width: max-content !important;
+    min-width: 112px !important;
+    max-width: 100% !important;
+    height: 36px !important;
+    min-height: 36px !important;
   }
 }
-
 @container osv-items (max-width: 900px) {
   #modal-root form[data-form="order"] .form-section:has(#order-items-editor) .stock-check,
   #modal-root form[data-form="order"] .form-section:has(#order-items-editor) .stock-check-v284 {
-    width: 68px !important;
-    min-width: 68px !important;
-    height: 68px !important;
-    min-height: 68px !important;
+    width: max-content !important;
+    min-width: 112px !important;
+    max-width: 100% !important;
+    height: 36px !important;
+    min-height: 36px !important;
   }
 }
 

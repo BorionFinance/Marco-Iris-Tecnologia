@@ -1,7 +1,7 @@
 /* Marco Iris Tecnologia v2.7.5 — interação da Nova OSV modular. */
 (()=>{
   'use strict';
-  const VERSION='2.8.7';
+  const VERSION=window.MARCO_APP_VERSION||'2.8.12';
   const ORDER_FORM='form[data-form="order"]';
   const INTERNAL_SCROLL='.client-suggestions:not([hidden]),[role="listbox"]:not([hidden]),.quick-actions-menu,[data-dropdown-panel]:not([hidden]),.select-options:not([hidden])';
 
