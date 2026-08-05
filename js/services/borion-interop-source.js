@@ -6,13 +6,13 @@
      bloqueio de publicação antes da carga oficial e proteção contra snapshot vazio. */
   const SPEC = Object.freeze({
     schema: 'borion.interop.snapshot', schemaVersion: 2, bridgeVersion: '3.0.1',
-    sourceAppId: 'marco-iris', sourceAppName: 'Marco Iris Tecnologia', sourceAppVersion: '2.8.3',
+    sourceAppId: 'marco-iris', sourceAppName: 'Marco Iris Tecnologia', sourceAppVersion: '2.8.7',
     targetProfileAlias: 'default', snapshotFile: 'marco-iris.bridge.json', ackFile: 'marco-iris.ack.json',
     integrationFolder: 'Borion_Integracoes'
   });
   const DEVICE_KEY='marco_iris_device_id_v240_clean';
   const runtime={started:false,ready:false,initialSyncComplete:false,paused:new Set(),status:'waiting-authentication',reason:'Aguardando autenticação e base oficial.'};
-  let timer=null,interval=null,stateGetter=null,publishRequested=0,publishCompleted=0,publishState=null,publishLoopPromise=null,publishWaiters=[];
+  let timer=null,interval=null,stateGetter=null,publishRequested=0,publishCompleted=0,publishState=null,publishLoopPromise=null,publishWaiters=[],lastPeriodicContentHash='';
 
   function clone(value){ return value==null?value:JSON.parse(JSON.stringify(value)); }
   function nowIso(){ return new Date().toISOString(); }
@@ -148,7 +148,7 @@
   async function publishOnce(state){
     const bridge=ensureBridgeState(state);let snapshot;const destinations=[],errors=[];
     try{
-      snapshot=reconcileState(state);await MarcoStorage.save(state);
+      snapshot=reconcileState(state);lastPeriodicContentHash=snapshot.contentHash||lastPeriodicContentHash;await MarcoStorage.save(state);
       try{const handle=await MarcoStorage.getFolderHandle();if(handle&&await MarcoStorage.ensurePermission(handle,false)){const remote=await readJsonFromDirectory(handle,SPEC.snapshotFile);const guard=validateCandidateAgainstRemote(snapshot,remote);if(!guard.ok)throw Object.assign(new Error(guard.message),{code:guard.code});if(!guard.sameContent){await writeJsonToDirectory(handle,SPEC.snapshotFile,snapshot);destinations.push('local-folder');}else destinations.push('local-unchanged');const ack=await readJsonFromDirectory(handle,SPEC.ackFile);if(ack&&applyAcknowledgement(state,ack))destinations.push('local-ack');}}catch(e){errors.push('Pasta local: '+(e.message||String(e)));if(['INSTANCE_CONFLICT','EMPTY_BASE_BLOCKED','SUSPICIOUS_DROP','REMOTE_NEWER'].includes(e.code))throw e;}
       try{const drive=window.GoogleDriveMarco;if(drive&&drive.isConfigured&&drive.isConfigured()&&drive.writeIntegrationJson){const remote=await drive.readIntegrationJson(SPEC.snapshotFile);const guard=validateCandidateAgainstRemote(snapshot,remote);if(!guard.ok)throw Object.assign(new Error(guard.message),{code:guard.code});if(!guard.sameContent){await drive.writeIntegrationJson(SPEC.snapshotFile,snapshot);const confirmed=await drive.readIntegrationJson(SPEC.snapshotFile);if(!confirmed||snapshotCompany(confirmed)!==bridge.companyInstanceId||confirmed.contentHash!==snapshot.contentHash||Number(confirmed.revision)!==Number(snapshot.revision))throw Object.assign(new Error('O bridge gravado não foi confirmado pelo Google Drive.'),{code:'BRIDGE_CONFIRMATION_FAILED'});destinations.push('google-drive');}else destinations.push('google-unchanged');const ack=await drive.readIntegrationJson(SPEC.ackFile);if(ack&&applyAcknowledgement(state,ack))destinations.push('google-ack');}}catch(e){errors.push('Google Drive: '+(e.message||String(e)));if(['INSTANCE_CONFLICT','EMPTY_BASE_BLOCKED','SUSPICIOUS_DROP','REMOTE_NEWER'].includes(e.code))throw e;}
       bridge.lastPublishAt=nowIso();bridge.lastPublishStatus=destinations.some(x=>x.includes('drive')||x.includes('folder'))?'published':(destinations.some(x=>x.includes('unchanged'))?'unchanged':'prepared-offline');bridge.lastError=errors.join(' | ');await MarcoStorage.save(state);return {snapshot,destinations,errors};
@@ -182,7 +182,7 @@
   function prepareState(state){return reconcileState(state||(stateGetter&&stateGetter()));}
   async function publish(state,options={}){return await requestPublish(state,{delay:0,forceAfterValidation:!!options.forceAfterValidation});}
   function schedule(state,delay=140){if(!state||!canPublish())return false;publishState=state;++publishRequested;clearTimeout(timer);timer=setTimeout(()=>runPublishLoop().catch(e=>console.warn('[BORION_INTEROP_SOURCE] Falha ao publicar:',e)),delay);return true;}
-  function start(getter){if(typeof getter==='function')stateGetter=getter;if(runtime.started)return getRuntimeStatus();runtime.started=true;runtime.status='waiting-authentication';runtime.reason='Aguardando autenticação e carga da base oficial.';const tick=()=>{const state=stateGetter?stateGetter():null;if(state&&canPublish())schedule(state,20);};interval=setInterval(tick,5000);if(typeof document!=='undefined')document.addEventListener('visibilitychange',()=>{if(!document.hidden)tick();});if(typeof window!=='undefined'&&window.addEventListener){window.addEventListener('online',tick);window.addEventListener('pagehide',tick);}return getRuntimeStatus();}
+  function start(getter){if(typeof getter==='function')stateGetter=getter;if(runtime.started)return getRuntimeStatus();runtime.started=true;runtime.status='waiting-authentication';runtime.reason='Aguardando autenticação e carga da base oficial.';const tick=()=>{const state=stateGetter?stateGetter():null;if(!state||!canPublish())return;const snapshot=reconcileState(state),contentHash=String(snapshot?.contentHash||'');if(contentHash&&contentHash===lastPeriodicContentHash)return;lastPeriodicContentHash=contentHash;schedule(state,120);};interval=setInterval(tick,30000);if(typeof document!=='undefined')document.addEventListener('visibilitychange',()=>{if(!document.hidden)tick();});if(typeof window!=='undefined'&&window.addEventListener){window.addEventListener('online',tick);window.addEventListener('pagehide',tick);}return getRuntimeStatus();}
   function stop(){clearTimeout(timer);clearInterval(interval);runtime.started=false;runtime.ready=false;runtime.initialSyncComplete=false;runtime.status='stopped';runtime.reason='Integração parada.';publishRequested=publishCompleted=0;publishState=null;publishWaiters=[];}
 
   window.MarcoBorionInterop=Object.freeze({spec:SPEC,start,stop,schedule,publish,prepareState,setReady,setNotReady,pause,resume,getRuntimeStatus,

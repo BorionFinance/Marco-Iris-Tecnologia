@@ -1,0 +1,112 @@
+/* Marco Iris v2.8.7 — desempenho, scroll nativo e correção de Itens/Serviços */
+html{scroll-behavior:auto!important}
+button,.btn,[data-action],summary,a,select,label.checkbox{touch-action:manipulation}
+.content,.modal-body,.table-wrap,.quick-actions-menu,.client-suggestions,[role="listbox"]{
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;
+}
+.modal-body{overflow-y:auto!important;overflow-x:hidden!important;scrollbar-gutter:stable both-edges}
+#modal-root .form-section,#modal-root [data-layout-item-v256],#modal-root section.card{
+  overflow:visible!important;
+  overscroll-behavior:auto!important;
+}
+
+/* Não deixa filtros visuais caros repintarem centenas de linhas durante o scroll. */
+#view-root .card,#view-root .table-wrap,#view-root .list-row,#view-root .osv-table tr,
+#modal-root .form-section,#modal-root .item-editor-row,#modal-root .payment-editor-row,
+.quick-actions-menu,.client-suggestions,.select-options{
+  backdrop-filter:none!important;
+  -webkit-backdrop-filter:none!important;
+}
+
+/* Itens e Serviços: estoque e lixeira têm colunas próprias, sem sobreposição. */
+#modal-root form[data-form="order"] #order-items-editor .item-editor-row,
+#modal-root form[data-form="order"] #order-items-editor .item-editor-row-v280{
+  position:relative!important;
+  grid-template-columns:24px minmax(108px,.72fr) minmax(250px,2.35fr) 62px minmax(116px,.82fr) minmax(116px,.82fr) 86px 42px!important;
+  gap:8px!important;
+  padding:12px 10px!important;
+  align-items:end!important;
+}
+#modal-root form[data-form="order"] #order-items-editor .item-reorder-controls{grid-column:1!important}
+#modal-root form[data-form="order"] #order-items-editor .item-type{grid-column:2!important}
+#modal-root form[data-form="order"] #order-items-editor .item-name{grid-column:3!important}
+#modal-root form[data-form="order"] #order-items-editor .item-qty{grid-column:4!important}
+#modal-root form[data-form="order"] #order-items-editor .item-price{grid-column:5!important}
+#modal-root form[data-form="order"] #order-items-editor .item-subtotal{grid-column:6!important}
+#modal-root form[data-form="order"] #order-items-editor .stock-check,
+#modal-root form[data-form="order"] #order-items-editor .stock-check-v284{
+  position:static!important;
+  grid-column:7!important;
+  grid-row:1!important;
+  width:86px!important;
+  min-width:86px!important;
+  min-height:42px!important;
+  margin:0!important;
+  padding:6px!important;
+  justify-self:stretch!important;
+  align-self:end!important;
+}
+#modal-root form[data-form="order"] #order-items-editor [data-action="remove-item-row"],
+#modal-root form[data-form="order"] #order-items-editor .item-remove{
+  position:static!important;
+  inset:auto!important;
+  grid-column:8!important;
+  grid-row:1!important;
+  width:42px!important;
+  min-width:42px!important;
+  height:42px!important;
+  margin:0!important;
+  justify-self:end!important;
+  align-self:end!important;
+  z-index:2!important;
+}
+#modal-root form[data-form="order"] #order-items-editor .stock-check-v284.is-hidden,
+#modal-root form[data-form="order"] #order-items-editor .stock-check.is-hidden{
+  display:none!important;
+}
+#modal-root form[data-form="order"] .stock-check-content-v284{
+  display:grid!important;
+  grid-template-columns:18px 1fr!important;
+  gap:4px!important;
+  font-size:.67rem!important;
+  line-height:1.05!important;
+}
+
+.orders-pagination-v287{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 4px 2px;color:var(--muted)}
+.orders-pagination-v287>div{display:flex;align-items:center;gap:10px}.orders-pagination-v287 strong{color:var(--text);font-size:.85rem}
+
+/* PWA/celular: elimina animações decorativas e blur que causavam quedas de FPS. */
+@media (max-width:900px),(pointer:coarse){
+  *,*::before,*::after{scroll-behavior:auto!important}
+  .page-enter-right,.page-enter-left,.page-enter-soft,.page-exit-left,.page-exit-right,
+  .view-enter,.view-exit{animation:none!important}
+  .card,.modal,.sidebar,.topbar,.quick-actions-menu,.client-suggestions,.select-options,
+  .item-editor-row,.payment-editor-row,.form-section{
+    backdrop-filter:none!important;
+    -webkit-backdrop-filter:none!important;
+    box-shadow:none!important;
+  }
+  .content,.modal-body,.table-wrap{touch-action:pan-y pinch-zoom}
+  .mobile-bottom-nav{contain:layout paint style}
+  .orders-pagination-v287{flex-direction:column;align-items:stretch}
+  .orders-pagination-v287>div{justify-content:space-between}.orders-pagination-v287 strong{display:none}
+}
+
+@container osv-items (max-width:860px){
+  #modal-root form[data-form="order"] .form-section:has(#order-items-editor) .item-editor-row,
+  #modal-root form[data-form="order"] .form-section:has(#order-items-editor) .item-editor-row-v280{
+    grid-template-columns:28px minmax(0,1fr) 86px 42px!important;
+    grid-auto-rows:auto!important;
+    padding:12px!important;
+  }
+  #modal-root form[data-form="order"] .form-section:has(#order-items-editor) .item-reorder-controls{grid-column:1!important;grid-row:1/7!important}
+  #modal-root form[data-form="order"] .form-section:has(#order-items-editor) .item-type,
+  #modal-root form[data-form="order"] .form-section:has(#order-items-editor) .item-name,
+  #modal-root form[data-form="order"] .form-section:has(#order-items-editor) .item-qty,
+  #modal-root form[data-form="order"] .form-section:has(#order-items-editor) .item-price,
+  #modal-root form[data-form="order"] .form-section:has(#order-items-editor) .item-subtotal{grid-column:2/5!important;grid-row:auto!important}
+  #modal-root form[data-form="order"] .form-section:has(#order-items-editor) .stock-check,
+  #modal-root form[data-form="order"] .form-section:has(#order-items-editor) .stock-check-v284{grid-column:2/4!important;grid-row:auto!important;width:100%!important;min-width:0!important}
+  #modal-root form[data-form="order"] .form-section:has(#order-items-editor) [data-action="remove-item-row"]{grid-column:4!important;grid-row:1!important}
+}

@@ -21,6 +21,9 @@
     viewportRaf:0,
     viewportNavPending:false,
     focusScrollTimer:0,
+    observerRaf:0,
+    pointerGuard:null,
+    suppressClickUntil:0,
 
     isMobile(){return window.matchMedia('(max-width:900px)').matches;},
     currentView(){try{return CURRENT_VIEW||'dashboard';}catch(_){return 'dashboard';}},
@@ -334,15 +337,19 @@
       const root=document.getElementById('modal-root');
       if(!root||this.modalObserver)return;
       this.modalObserver=new MutationObserver(()=>{
-        const backdrop=root.querySelector('.modal-backdrop');
-        if(backdrop)this.decorateModal(backdrop);
-        else{
-          const appRoot=document.getElementById('root');
-          if(appRoot)appRoot.inert=false;
-        }
+        if(this.observerRaf)return;
+        this.observerRaf=requestAnimationFrame(()=>{
+          this.observerRaf=0;
+          const backdrop=root.querySelector(':scope > .modal-backdrop');
+          if(backdrop)this.decorateModal(backdrop);
+          else{
+            const appRoot=document.getElementById('root');
+            if(appRoot)appRoot.inert=false;
+          }
+        });
       });
-      this.modalObserver.observe(root,{childList:true,subtree:true});
-      const existing=root.querySelector('.modal-backdrop');
+      this.modalObserver.observe(root,{childList:true});
+      const existing=root.querySelector(':scope > .modal-backdrop');
       if(existing)this.decorateModal(existing);
     },
 
@@ -356,14 +363,19 @@
     observeRoot(){
       const root=document.getElementById('root');
       if(!root||this.rootObserver)return;
-      this.rootObserver=new MutationObserver(()=>{
-        if(document.body.classList.contains('login-page')){
-          this.viewStack.length=0;
-          window.MarcoMenu?.close?.();
-        }
-        this.setViewport();
-        this.patchNavigation();
-        this.ensureBottomNav();
+      let frame=0;
+      this.rootObserver=new MutationObserver(records=>{
+        const relevant=records.some(record=>[...record.addedNodes].some(node=>node.nodeType===1));
+        if(!relevant||frame)return;
+        frame=requestAnimationFrame(()=>{
+          frame=0;
+          if(document.body.classList.contains('login-page')){
+            this.viewStack.length=0;
+            window.MarcoMenu?.close?.();
+          }
+          this.patchNavigation();
+          this.ensureBottomNav();
+        });
       });
       this.rootObserver.observe(root,{childList:true,subtree:true});
     },
@@ -388,11 +400,39 @@
       },{passive:true});
     },
 
+    installGhostClickGuard(){
+      document.addEventListener('pointerdown',e=>{
+        if(!this.isMobile()||!e.isPrimary)return;
+        this.pointerGuard={id:e.pointerId,x:e.clientX,y:e.clientY,moved:false};
+      },{capture:true,passive:true});
+      document.addEventListener('pointermove',e=>{
+        const guard=this.pointerGuard;
+        if(!guard||guard.id!==e.pointerId||guard.moved)return;
+        if(Math.abs(e.clientX-guard.x)>10||Math.abs(e.clientY-guard.y)>10)guard.moved=true;
+      },{capture:true,passive:true});
+      const finish=e=>{
+        const guard=this.pointerGuard;
+        if(!guard||guard.id!==e.pointerId)return;
+        if(guard.moved)this.suppressClickUntil=performance.now()+420;
+        this.pointerGuard=null;
+      };
+      document.addEventListener('pointerup',finish,{capture:true,passive:true});
+      document.addEventListener('pointercancel',finish,{capture:true,passive:true});
+      document.addEventListener('click',e=>{
+        if(performance.now()>this.suppressClickUntil)return;
+        if(e.detail===0)return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+      },true);
+    },
+
     installSwipeNavigation(){
       const views=['dashboard','orders','agenda','clients'];
       document.addEventListener('pointerdown',e=>{
         if(!this.isMobile()||!e.isPrimary||e.button!==0)return;
         if(!e.target.closest('#view-root')||e.target.closest('input,select,textarea,button,a,[contenteditable],.table-wrap,.modal,.sidebar'))return;
+        const edge=Math.min(e.clientX,window.innerWidth-e.clientX);
+        if(edge>24)return;
         this.swipe={id:e.pointerId,x:e.clientX,y:e.clientY,time:performance.now()};
       },{passive:true});
       document.addEventListener('pointerup',e=>{
@@ -466,6 +506,7 @@
       this.observeRoot();
       this.ensureBottomNav();
       this.installTouchFeedback();
+      this.installGhostClickGuard();
       this.installSwipeNavigation();
       this.installFocusTrap();
       this.installEnterNavigation();

@@ -1,7 +1,7 @@
 /* Marco Iris Tecnologia v2.7.5 — interação da Nova OSV modular. */
 (()=>{
   'use strict';
-  const VERSION='2.8.3';
+  const VERSION='2.8.7';
   const ORDER_FORM='form[data-form="order"]';
   const INTERNAL_SCROLL='.client-suggestions:not([hidden]),[role="listbox"]:not([hidden]),.quick-actions-menu,[data-dropdown-panel]:not([hidden]),.select-options:not([hidden])';
 
@@ -58,33 +58,34 @@
     }
   },true);
 
-  document.addEventListener('wheel',event=>{
-    if(event.ctrlKey)return;
-    const modal=orderModalFrom(event.target);if(!modal)return;
-    const internal=event.target.closest?.(INTERNAL_SCROLL);
-    if(internal&&canConsumeWheel(internal,event.deltaY)){
-      event.stopPropagation();
-      return;
-    }
-    const body=modal.querySelector(':scope > .modal-body');
-    if(!body||body.scrollHeight<=body.clientHeight+1||!event.deltaY)return;
-    if(event.cancelable)event.preventDefault();
-    body.scrollTop+=event.deltaY;
-  },{capture:true,passive:false});
 
+  let hydrateFrame=0;
+  const scheduleHydrate=root=>{
+    if(hydrateFrame)return;
+    hydrateFrame=requestAnimationFrame(()=>{hydrateFrame=0;hydrate(root||document);});
+  };
   const observer=new MutationObserver(records=>{
-    let needsHydrate=false;
+    let structuralRoot=null,layerOnly=false;
     for(const record of records){
-      if(record.type==='childList'&&([...record.addedNodes].some(node=>node.nodeType===1)))needsHydrate=true;
-      if(record.type==='attributes'&&(record.attributeName==='hidden'||record.attributeName==='class'))needsHydrate=true;
-      if(needsHydrate)break;
+      if(record.type==='childList'){
+        for(const node of record.addedNodes){
+          if(node.nodeType!==1)continue;
+          if(node.matches?.(ORDER_FORM+',.item-editor-row')||node.querySelector?.(ORDER_FORM+',.item-editor-row')){
+            structuralRoot=node.closest?.(ORDER_FORM)||node.querySelector?.(ORDER_FORM)||record.target.closest?.(ORDER_FORM)||document;
+            break;
+          }
+        }
+      }else if(record.type==='attributes'&&record.attributeName==='hidden')layerOnly=true;
+      if(structuralRoot)break;
     }
-    if(needsHydrate)requestAnimationFrame(()=>hydrate(document));
+    if(structuralRoot)scheduleHydrate(structuralRoot);
+    else if(layerOnly)requestAnimationFrame(()=>updateClientLayer(document));
   });
   const modalRoot=document.getElementById('modal-root');
-  if(modalRoot)observer.observe(modalRoot,{childList:true,subtree:true,attributes:true,attributeFilter:['hidden','class']});
+  if(modalRoot)observer.observe(modalRoot,{childList:true,subtree:true,attributes:true,attributeFilter:['hidden']});
 
-  window.addEventListener('resize',()=>requestAnimationFrame(()=>growAllTextareas(document)),{passive:true});
+  let resizeTimer=0;
+  window.addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>growAllTextareas(document),120);},{passive:true});
   document.addEventListener('DOMContentLoaded',()=>hydrate(document),{once:true});
   requestAnimationFrame(()=>hydrate(document));
 

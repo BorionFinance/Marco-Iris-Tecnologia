@@ -21,7 +21,7 @@ let REMOTE_REFRESH_TIMER=null;
 let REMOTE_REFRESH_INFLIGHT=null;
 let REMOTE_REFRESH_FOCUS_HANDLER=null;
 let REMOTE_REFRESH_VISIBILITY_HANDLER=null;
-const REMOTE_REFRESH_INTERVAL_MS=1200;
+const REMOTE_REFRESH_INTERVAL_MS=8000;
 let LAST_AUTO_BACKUP_AT='';
 let LOCKED=true;
 let LOCK_NETWORK=null;
@@ -409,7 +409,7 @@ async function refreshFromDriveIfNewer({reason='intervalo'}={}){
 }
 function startRemoteRefresh(){
   clearInterval(REMOTE_REFRESH_TIMER);
-  REMOTE_REFRESH_TIMER=setInterval(()=>refreshFromDriveIfNewer({reason:'intervalo-rapido'}),REMOTE_REFRESH_INTERVAL_MS);
+  REMOTE_REFRESH_TIMER=setInterval(()=>refreshFromDriveIfNewer({reason:'intervalo-otimizado'}),REMOTE_REFRESH_INTERVAL_MS);
   if(REMOTE_REFRESH_FOCUS_HANDLER)window.removeEventListener('focus',REMOTE_REFRESH_FOCUS_HANDLER);
   if(REMOTE_REFRESH_VISIBILITY_HANDLER)document.removeEventListener('visibilitychange',REMOTE_REFRESH_VISIBILITY_HANDLER);
   REMOTE_REFRESH_FOCUS_HANDLER=()=>setTimeout(()=>refreshFromDriveIfNewer({reason:'foco'}),150);
@@ -836,7 +836,7 @@ function renderLogin(entry=''){
         <div class="lock-feature"><div class="lock-feature-icon">${icon('cloud')}</div><div><strong>Soluções em nuvem</strong><small>Fotos, PDFs, anexos e dados organizados no Google Drive.</small></div></div>
       </div>
     </section>
-    <footer class="lock-footer"><div class="lock-footer-cards"><div class="lock-footer-card"><strong><span class="status-dot-live"></span> Sistema operacional</strong><small>Interface pronta para uso.</small></div><div class="lock-footer-card"><strong>${icon('cloud')} Google Drive e backups</strong><small>Dados e arquivos em pastas separadas.</small></div><div class="lock-footer-card"><strong>${icon('download')} Aplicativo PWA</strong><small>Instalação no computador e celular.</small></div></div><div class="lock-footer-meta"><strong>Marco Iris Tecnologia © 2026</strong><span>v2.8.5</span></div></footer>
+    <footer class="lock-footer"><div class="lock-footer-cards"><div class="lock-footer-card"><strong><span class="status-dot-live"></span> Sistema operacional</strong><small>Interface pronta para uso.</small></div><div class="lock-footer-card"><strong>${icon('cloud')} Google Drive e backups</strong><small>Dados e arquivos em pastas separadas.</small></div><div class="lock-footer-card"><strong>${icon('download')} Aplicativo PWA</strong><small>Instalação no computador e celular.</small></div></div><div class="lock-footer-meta"><strong>Marco Iris Tecnologia © 2026</strong><span>v2.8.7</span></div></footer>
   </main>`;
   startLockNetwork();
 }
@@ -1316,7 +1316,7 @@ async function handleAction(btn){
 }
 
 window.MarcoOptimisticDeleteV266={
-  version:'2.8.5',
+  version:'2.8.7',
   pendingCount:()=>PENDING_PAYMENT_DELETIONS.size,
   pendingIds:()=>[...PENDING_PAYMENT_DELETIONS.values()].map(item=>item.id),
   apply:()=>applyPendingPaymentDeletions(STATE),
@@ -1399,7 +1399,7 @@ async function boot(){
   if(!navigator.onLine){renderCloudRequired();return;}
   renderLogin();
   if('serviceWorker' in navigator){
-    navigator.serviceWorker.register('./sw.js?v=2.8.5').then(reg=>reg?.update?.()).catch(e=>console.warn('Service worker:',e));
+    navigator.serviceWorker.register('./sw.js?v=2.8.7').then(reg=>reg?.update?.()).catch(e=>console.warn('Service worker:',e));
   }
   window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();window.__installPrompt=e;});
   window.addEventListener('offline',()=>renderCloudRequired('A internet caiu. O aplicativo foi bloqueado para evitar qualquer alteração fora do Google Drive.'));

@@ -1,0 +1,44 @@
+MARCO IRIS v2.8.7 — OTIMIZAÇÃO SEGURA
+
+BASE
+- Construído sobre a v2.8.5 original enviada pelo usuário.
+- Estrutura modular preservada: css/, js/, js/services/, js/data/, js/vendor/ e assets/.
+- Quantidade reduzida de 96 para 56 arquivos, sem empacotamento gigante.
+
+CORREÇÕES VISUAIS
+- Itens e Serviços: botão Baixar estoque e lixeira agora ocupam colunas separadas.
+- A opção de estoque fica oculta em serviços e aparece somente em produtos/insumos.
+- Layout responsivo corrigido para desktop, tablet, celular e PWA.
+- Nenhuma sobreposição detectada nos testes com quatro serviços e um produto.
+
+DESEMPENHO
+- MutationObservers globais substituídos por observação estrutural limitada ao app e ao modal.
+- Removidos observadores individuais por card/seção e interceptadores artificiais da roda do mouse.
+- Scroll de modais, OSVs, tabelas e listas voltou a ser nativo.
+- Menus suspensos reposicionados no máximo uma vez por quadro.
+- Proteção contra ghost click após gesto de rolagem no celular/PWA.
+- Gestos laterais de navegação aceitos apenas quando iniciados nas bordas da tela.
+- Blurs, sombras pesadas e animações decorativas reduzidos em telas touch e menores.
+- Verificação remota do Google Drive ajustada de 1,2 segundo para 8 segundos, mantendo atualização imediata ao voltar para o app.
+- Publicação periódica da integração Borion agora só ocorre quando o conteúdo mudou; verificação de segurança passou para 30 segundos.
+- Varredura de privacidade não percorre toda a tela quando os valores já estão visíveis.
+
+ORDENS DE SERVIÇO
+- Lista paginada em 50 OSVs por página para evitar centenas de linhas simultâneas no DOM.
+- Filtros e troca de período reiniciam a paginação corretamente.
+- Teste com 220 OSVs: 50 linhas renderizadas por página, páginas 1 e 2 validadas.
+
+LIMPEZA
+- Removidos apenas relatórios antigos, testes antigos, duplicatas e módulos históricos do Borion que não eram carregados pelo index.html.
+- CSS e JavaScript ativos continuam separados e editáveis.
+
+VALIDAÇÕES EXECUTADAS
+- Sintaxe de todos os arquivos JavaScript: aprovada.
+- Referências do index.html: aprovadas, sem arquivo ausente.
+- Desktop 1100 × 800: estoque/lixeira sem sobreposição.
+- Mobile 390 × 844: itens dentro da largura da tela e ghost click bloqueado após rolagem.
+- Paginação com 220 OSVs: aprovada.
+- Console do navegador nos cenários simulados: sem erros.
+
+VERSÃO
+2.8.7

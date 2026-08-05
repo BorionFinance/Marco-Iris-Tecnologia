@@ -47,7 +47,7 @@
     requestAnimationFrame(()=>{queued=false;inject();});
   };
   const root=document.getElementById('root');
-  if(root)new MutationObserver(schedule).observe(root,{childList:true,subtree:true});
+  if(root)new MutationObserver(schedule).observe(root,{childList:true});
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',schedule,{once:true});
   else schedule();
 })();

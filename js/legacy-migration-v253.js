@@ -252,6 +252,9 @@
     if(runtime.button)return;
     const b=document.createElement('button');b.id='legacy-migration-launch';b.type='button';b.textContent='Migrar dados históricos';b.onclick=open;document.body.appendChild(b);runtime.button=b;
   }
-  setInterval(ensureButton,1200);
-  window.MarcoLegacyMigration=Object.freeze({version:VERSION,open,run,mergeState,counts,assertExpected,selectPrivatePackage,__test:{mergeMissing,mergeMedia,mergeCollection,mediaList,normalizePrivatePath}});
+  const scheduleEnsureButton=()=>requestAnimationFrame(ensureButton);
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',scheduleEnsureButton,{once:true});else scheduleEnsureButton();
+  window.addEventListener('focus',scheduleEnsureButton,{passive:true});
+  document.addEventListener('marco-local-day-changed',scheduleEnsureButton);
+  window.MarcoLegacyMigration=Object.freeze({version:VERSION,open,run,mergeState,counts,assertExpected,selectPrivatePackage,ensureButton,__test:{mergeMissing,mergeMedia,mergeCollection,mediaList,normalizePrivatePath}});
 })();

@@ -4,7 +4,7 @@
  * Camada integrada de regras, telas e migração. Executada antes do boot.
  */
 (() => {
-  const PTS_VERSION = '2.8.4';
+  const PTS_VERSION = '2.8.7';
   const OPERATIONAL_STATUSES = ['Orçamento','Em andamento','Aguardando peça','Concluída','Cancelada'];
   const PAYMENT_METHODS = ['Pix','Dinheiro','Débito','Crédito (À vista)','Crédito 2x','Crédito 3x','Crédito 4x','Crédito 5x','Crédito 6x','Crédito 7x','Crédito 8x','Crédito 9x','Crédito 10x','Crédito 11x','Crédito 12x','Boleto','Transferência','Outro'];
   const EQUIPMENT_TYPES = ['Computador Gamer','Computador de Escritório','Notebook Gamer','Notebook','Celular','Monitor','Impressora','Console','Game Stick','Rack','Teclado','Roteador','Mouse'];
@@ -25,6 +25,8 @@
   };
 
   let ORDER_FILTERS = {status:'Todos',mode:'Nenhum',day:today(),month:today().slice(0,7),year:String(new Date().getFullYear())};
+  let ORDERS_PAGE_V287 = 1;
+  const ORDERS_PAGE_SIZE_V287 = 50;
   let FINANCE_FILTER = {month:today().slice(0,7)};
   let DOCUMENT_FILTER = {date:''};
   let DASHBOARD_LAYOUT_EDIT = false;
@@ -552,7 +554,13 @@
     const rows=all.filter(o=>(SHOW_ARCHIVED.orders?o.registrationStatus==='Inativo':o.registrationStatus!=='Inativo')&&orderMatchesTemporal(o)).sort((a,b)=>(b.openedAt||'').localeCompare(a.openedAt||''));
     const filtered=ORDER_FILTERS.status==='Todos'?rows:rows.filter(o=>normalizeText(o.status)===normalizeText(ORDER_FILTERS.status));
     const archived=all.filter(o=>o.registrationStatus==='Inativo').length;
-    return `<div class="toolbar orders-toolbar"><div class="toolbar-left"><button class="btn primary" data-action="new-order">+ Nova OSV</button><div class="mobile-filter-panel"><select id="order-status-filter" class="filter-control"><option>Todos</option>${OPERATIONAL_STATUSES.map(v=>`<option ${v===ORDER_FILTERS.status?'selected':''}>${v}</option>`).join('')}</select>${temporalControls()}</div><button class="btn secondary" data-action="toggle-archived-orders">${SHOW_ARCHIVED.orders?'Ver ativas':`Arquivadas (${archived})`}</button></div><div class="toolbar-right">${viewModeSwitcher('orders',mode)}<span class="badge blue">${filtered.length} OSVs</span></div></div><section class="card view-mode-content mode-${mode}" data-view-content="orders"><div class="table-wrap"><table class="table osv-table"><thead><tr><th>OSV</th><th>Abertura</th><th>Cliente</th><th>Equipamento</th><th>Financeiro</th><th>Status</th><th class="text-right">Valor</th><th>Ações</th></tr></thead><tbody>${filtered.map(o=>{const f=orderFinancialInfo(o);return `<tr><td><button class="code-link" data-action="view-order" data-id="${attr(o.id)}"><strong>${esc(o.id)}</strong></button>${o.registrationStatus==='Inativo'?'<small class="muted">Arquivada</small>':''}</td><td>${formatDate(o.openedAt)}</td><td><button class="text-link" data-action="view-client" data-id="${attr(o.clientId)}">${esc(o.clientName||findClient(o.clientId)?.name||'—')}</button></td><td><strong>${esc(o.equipmentType||'—')}</strong><small class="muted">${esc(o.brandModel||'')}</small></td><td>${statusBadge(f.status==='Parcial'&&f.overdue?'Parcial - vencido':f.status)}<small class="muted">${f.balance>0?currency(f.balance)+' pendente':''}</small></td><td><div class="inline-status-shell" data-status-tone="${attr(normalizeText(o.status))}"><select class="inline-status" data-quick-order-status="${attr(o.id)}" aria-label="Status operacional da OSV ${attr(o.id)}">${OPERATIONAL_STATUSES.map(s=>`<option value="${attr(s)}" ${s===o.status?'selected':''}>${esc(s)}</option>`).join('')}</select><span class="inline-status-chevron" aria-hidden="true">${icon('arrow',14)}</span><span class="inline-status-saving" aria-hidden="true"></span></div></td><td class="text-right"><strong>${currency(o.total)}</strong></td><td>${quickOrderActions(o)}</td></tr>`;}).join('')||'<tr><td colspan="8"><div class="empty">Nenhuma OSV encontrada.</div></td></tr>'}</tbody></table></div></section>`;
+    const totalPages=Math.max(1,Math.ceil(filtered.length/ORDERS_PAGE_SIZE_V287));
+    ORDERS_PAGE_V287=Math.max(1,Math.min(ORDERS_PAGE_V287,totalPages));
+    const pageStart=(ORDERS_PAGE_V287-1)*ORDERS_PAGE_SIZE_V287;
+    const visibleOrders=filtered.slice(pageStart,pageStart+ORDERS_PAGE_SIZE_V287);
+    const pageLabel=filtered.length?`${pageStart+1}–${Math.min(pageStart+visibleOrders.length,filtered.length)} de ${filtered.length}`:'0 OSVs';
+    const pagination=filtered.length>ORDERS_PAGE_SIZE_V287?`<nav class="orders-pagination-v287" aria-label="Paginação das ordens"><span>${pageLabel}</span><div><button type="button" class="btn secondary compact" data-action="orders-page-v287" data-page="${ORDERS_PAGE_V287-1}" ${ORDERS_PAGE_V287<=1?'disabled':''}>← Anterior</button><strong>Página ${ORDERS_PAGE_V287} de ${totalPages}</strong><button type="button" class="btn secondary compact" data-action="orders-page-v287" data-page="${ORDERS_PAGE_V287+1}" ${ORDERS_PAGE_V287>=totalPages?'disabled':''}>Próxima →</button></div></nav>`:'';
+    return `<div class="toolbar orders-toolbar"><div class="toolbar-left"><button class="btn primary" data-action="new-order">+ Nova OSV</button><div class="mobile-filter-panel"><select id="order-status-filter" class="filter-control"><option>Todos</option>${OPERATIONAL_STATUSES.map(v=>`<option ${v===ORDER_FILTERS.status?'selected':''}>${v}</option>`).join('')}</select>${temporalControls()}</div><button class="btn secondary" data-action="toggle-archived-orders">${SHOW_ARCHIVED.orders?'Ver ativas':`Arquivadas (${archived})`}</button></div><div class="toolbar-right">${viewModeSwitcher('orders',mode)}<span class="badge blue">${filtered.length} OSVs</span></div></div><section class="card view-mode-content mode-${mode}" data-view-content="orders"><div class="table-wrap"><table class="table osv-table"><thead><tr><th>OSV</th><th>Abertura</th><th>Cliente</th><th>Equipamento</th><th>Financeiro</th><th>Status</th><th class="text-right">Valor</th><th>Ações</th></tr></thead><tbody>${visibleOrders.map(o=>{const f=orderFinancialInfo(o);return `<tr><td><button class="code-link" data-action="view-order" data-id="${attr(o.id)}"><strong>${esc(o.id)}</strong></button>${o.registrationStatus==='Inativo'?'<small class="muted">Arquivada</small>':''}</td><td>${formatDate(o.openedAt)}</td><td><button class="text-link" data-action="view-client" data-id="${attr(o.clientId)}">${esc(o.clientName||findClient(o.clientId)?.name||'—')}</button></td><td><strong>${esc(o.equipmentType||'—')}</strong><small class="muted">${esc(o.brandModel||'')}</small></td><td>${statusBadge(f.status==='Parcial'&&f.overdue?'Parcial - vencido':f.status)}<small class="muted">${f.balance>0?currency(f.balance)+' pendente':''}</small></td><td><div class="inline-status-shell" data-status-tone="${attr(normalizeText(o.status))}"><select class="inline-status" data-quick-order-status="${attr(o.id)}" aria-label="Status operacional da OSV ${attr(o.id)}">${OPERATIONAL_STATUSES.map(s=>`<option value="${attr(s)}" ${s===o.status?'selected':''}>${esc(s)}</option>`).join('')}</select><span class="inline-status-chevron" aria-hidden="true">${icon('arrow',14)}</span><span class="inline-status-saving" aria-hidden="true"></span></div></td><td class="text-right"><strong>${currency(o.total)}</strong></td><td>${quickOrderActions(o)}</td></tr>`;}).join('')||'<tr><td colspan="8"><div class="empty">Nenhuma OSV encontrada.</div></td></tr>'}</tbody></table></div>${pagination}</section>`;
   };
 
   function firstName(name){return normalizeText(name).split(' ')[0]||'';}
@@ -1442,6 +1450,7 @@
   handleAction = async function(btn){
     const a=btn.dataset.action;
     try{
+      if(a==='orders-page-v287'){ORDERS_PAGE_V287=Math.max(1,num(btn.dataset.page)||1);renderView('none');requestAnimationFrame(()=>document.querySelector('[data-view-content="orders"]')?.scrollIntoView({block:'start',behavior:'auto'}));return;}
       if(a==='settings-category'){setSettingsCategory(btn.dataset.settingsCategory);renderView();return;}
       if(a==='factory-reset-app'){await factoryResetApp();return;}
       if(a==='new-test-profile'){
@@ -1487,7 +1496,7 @@
       }
       if(a==='product-sort'){const key=btn.dataset.sortKey;if(!['product','supplier','cost','margin','sale','stock','minimum'].includes(key))return;if(PRODUCT_SORT.key!==key)PRODUCT_SORT={key,direction:'desc'};else PRODUCT_SORT={key,direction:PRODUCT_SORT.direction==='default'?'desc':PRODUCT_SORT.direction==='desc'?'asc':'default'};if(PRODUCT_SORT.direction==='default')PRODUCT_SORT.key=null;saveProductSort();renderView();return;}
       if(a==='view-current-pdf'){await viewCurrentOrderPdf(btn.dataset.id);return;}
-      if(a==='clear-order-filters'){ORDER_FILTERS.status='Todos';periodState('orders').month='';periodState('orders').days='';renderView();return;}
+      if(a==='clear-order-filters'){ORDERS_PAGE_V287=1;ORDER_FILTERS.status='Todos';periodState('orders').month='';periodState('orders').days='';renderView();return;}
       if(a==='clear-finance-filter'){periodState('finance').month='';periodState('finance').days='';renderView();return;}
       if(a==='toggle-dashboard-layout'){DASHBOARD_LAYOUT_SNAPSHOT=clone(dashboardLayoutStore());DASHBOARD_LAYOUT_HISTORY=[];DASHBOARD_LAYOUT_EDIT=true;renderView();return;}
       if(a==='save-dashboard-layout'){DASHBOARD_LAYOUT_EDIT=false;await persist('Layout da Visão Geral salvo',screenBand(),{folder:false,google:false});DASHBOARD_LAYOUT_SNAPSHOT=null;DASHBOARD_LAYOUT_HISTORY=[];renderView();return;}
@@ -2146,8 +2155,10 @@
     if(QUICK_MENU_PORTAL_225?.details===details)restoreQuickActionsMenu225();
   },true);
   // Rolar ou redimensionar desancoraria o menu, então ele acompanha o botão.
-  document.addEventListener('scroll',()=>{const open=openQuickActionsDetails225();if(open)positionQuickActionsMenu225(open);},{capture:true,passive:true});
-  window.addEventListener?.('resize',()=>{const open=openQuickActionsDetails225();if(open)positionQuickActionsMenu225(open);},{passive:true});
+  let QUICK_MENU_POSITION_FRAME_287=0;
+  const scheduleQuickMenuPosition287=()=>{if(QUICK_MENU_POSITION_FRAME_287)return;QUICK_MENU_POSITION_FRAME_287=requestAnimationFrame(()=>{QUICK_MENU_POSITION_FRAME_287=0;const open=openQuickActionsDetails225();if(open)positionQuickActionsMenu225(open);});};
+  document.addEventListener('scroll',scheduleQuickMenuPosition287,{capture:true,passive:true});
+  window.addEventListener?.('resize',scheduleQuickMenuPosition287,{passive:true});
   document.addEventListener('pointerdown',event=>{
     // Com o menu portado para o body ele não é mais descendente do <details>: os dois pontos contam como "dentro".
     const opened=document.querySelector('details.quick-actions[open]');

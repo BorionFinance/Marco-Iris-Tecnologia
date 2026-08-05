@@ -11,6 +11,9 @@
   const PAYMENT_WITHOUT_FEE = /pix|dinheiro|boleto|transfer[eê]ncia/i;
   const parseSequenceV280 = value => Number(String(value || '').match(/(\d+)(?!.*\d)/)?.[1] || 0);
   const observedScrollable = new WeakSet();
+  const scrollResizeObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(entries => {
+    for (const entry of entries) evaluateScrollable(entry.target);
+  }) : null;
   let patchQueued = false;
 
   const q = (selector, root = document) => root?.querySelector?.(selector) || null;
@@ -538,21 +541,30 @@
     host.appendChild(card);
   }
 
+  function evaluateScrollable(element) {
+    if (!element?.isConnected) return;
+    const overflow = element.scrollHeight > element.clientHeight + 2;
+    if (element.dataset.v287Overflow === String(overflow)) return;
+    element.dataset.v287Overflow = String(overflow);
+    element.classList.toggle('has-inner-scroll-v280', overflow);
+    element.classList.toggle('no-inner-scroll-v280', !overflow);
+  }
+
   function markScrollable(element) {
     if (!element || observedScrollable.has(element)) return;
     observedScrollable.add(element);
-    const evaluate = () => {
-      const overflow = element.scrollHeight > element.clientHeight + 2;
-      element.classList.toggle('has-inner-scroll-v280', overflow);
-      element.classList.toggle('no-inner-scroll-v280', !overflow);
-    };
-    if (typeof ResizeObserver === 'function') new ResizeObserver(evaluate).observe(element);
-    new MutationObserver(evaluate).observe(element, { childList: true, subtree: true, characterData: true });
-    evaluate();
+    scrollResizeObserver?.observe(element);
+    evaluateScrollable(element);
   }
 
   function patchScroll(root = document) {
-    qa('#modal-root [data-layout-item-v256], #modal-root section.card, #modal-root .form-section', root).forEach(markScrollable);
+    // Cards, seções e campos da OSV não devem virar dezenas de áreas de rolagem.
+    // A rolagem principal fica nativa na modal; apenas listas suspensas mantêm scroll próprio.
+    qa('#modal-root [data-layout-item-v256].has-inner-scroll-v280, #modal-root section.card.has-inner-scroll-v280, #modal-root .form-section.has-inner-scroll-v280', root).forEach(element => {
+      element.classList.remove('has-inner-scroll-v280', 'no-inner-scroll-v280');
+      delete element.dataset.v287Overflow;
+    });
+    qa('#modal-root .modal-body, #modal-root .client-suggestions, #modal-root [role="listbox"], #modal-root .select-options, .quick-actions-menu', root).forEach(markScrollable);
   }
 
   function patchAll() {
@@ -746,32 +758,24 @@ Esta ação não poderá ser desfeita.`,
   document.addEventListener('input', event => {
     const row = event.target.closest?.('.payment-editor-row');
     if (row) queueMicrotask(() => updatePaymentRow(row));
-    if (event.target.closest?.('form[data-form="order"]')) schedulePatch();
-    if (event.target.closest?.('form[data-form="payment"]')) schedulePatch();
   }, true);
   document.addEventListener('change', event => {
     const row = event.target.closest?.('.payment-editor-row');
     if (row) queueMicrotask(() => updatePaymentRow(row));
-    schedulePatch();
+    if (event.target.matches?.('[data-item-field="type"], [data-payment-field="method"], [name="paymentMethod"]')) schedulePatch();
   }, true);
 
-  document.addEventListener('wheel', event => {
-    const modalBody = event.target.closest?.('#modal-root .modal-body');
-    if (!modalBody) return;
-    const internal = event.target.closest?.('.has-inner-scroll-v280');
-    if (internal) {
-      const canDown = event.deltaY > 0 && internal.scrollTop + internal.clientHeight < internal.scrollHeight - 1;
-      const canUp = event.deltaY < 0 && internal.scrollTop > 0;
-      if (canDown || canUp) return;
-    }
-    if (modalBody.scrollHeight > modalBody.clientHeight + 2) {
-      event.preventDefault();
-      modalBody.scrollBy({ top: event.deltaY, behavior: 'auto' });
-    }
-  }, { capture: true, passive: false });
-
-  new MutationObserver(schedulePatch).observe(document.documentElement, { childList: true, subtree: true, characterData: true });
-  window.addEventListener('resize', schedulePatch, { passive: true });
+  const structuralPatchNeeded = records => records.some(record => [...record.addedNodes].some(node =>
+    node.nodeType === 1 && (node.matches?.('.modal-backdrop,.modal,form,.item-editor-row,.payment-editor-row,.osv-table,.settings-category-content') ||
+      node.querySelector?.('.modal,form,.item-editor-row,.payment-editor-row,.osv-table,.settings-category-content'))
+  ));
+  const patchObserver = new MutationObserver(records => { if (structuralPatchNeeded(records)) schedulePatch(); });
+  const modalRoot = document.getElementById('modal-root');
+  const appRoot = document.getElementById('root');
+  if (modalRoot) patchObserver.observe(modalRoot, { childList: true, subtree: true });
+  if (appRoot) patchObserver.observe(appRoot, { childList: true, subtree: true });
+  let resizeTimer = 0;
+  window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(schedulePatch, 120); }, { passive: true });
   window.MarcoV280 = Object.freeze({ version: VERSION, patchAll, paymentHasFee });
   schedulePatch();
 })();

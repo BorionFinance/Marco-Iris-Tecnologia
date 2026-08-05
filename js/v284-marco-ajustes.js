@@ -200,16 +200,21 @@
   }
 
   function patchAll() {
-    qa('#modal-root .modal').forEach(modal => {
+    const modal = q('#modal-root .modal');
+    if (modal) {
       patchModalHeader(modal);
       patchOrderDetail(modal);
-    });
-    qa('form[data-form="order"]').forEach(patchOrderForm);
-    qa('form[data-form="product"]').forEach(patchProductForm);
-    qa('form[data-form="stock-movement"]').forEach(patchStockMovementForm);
-    qa('form[data-form="payment"]').forEach(patchStandalonePayment);
-    patchOrderTable(document);
-    refreshPdfButtons(document);
+      qa('form[data-form="order"]', modal).forEach(patchOrderForm);
+      qa('form[data-form="product"]', modal).forEach(patchProductForm);
+      qa('form[data-form="stock-movement"]', modal).forEach(patchStockMovementForm);
+      qa('form[data-form="payment"]', modal).forEach(patchStandalonePayment);
+      refreshPdfButtons(modal);
+    }
+    const view = q('#view-root');
+    if (view) {
+      patchOrderTable(view);
+      refreshPdfButtons(view);
+    }
   }
 
   async function findOrderForm(attempts = 80) {
@@ -599,21 +604,27 @@
   }, true);
 
   document.addEventListener('input', event => {
+    if (!event.target.matches?.('[data-payment-field="value"], [data-payment-field="fee"]')) return;
     const row = event.target.closest?.('.payment-editor-row');
     if (row) updatePaymentRow(row);
   }, true);
   document.addEventListener('change', event => {
     const row = event.target.closest?.('.payment-editor-row');
-    if (row) {
-      updatePaymentRow(row);
-      schedulePatch();
-    }
-    if (event.target.matches?.('[data-item-field="type"]')) schedulePatch();
+    if (row) updatePaymentRow(row);
+    if (event.target.matches?.('[data-item-field="type"], [data-payment-field="method"], [name="paymentMethod"]')) schedulePatch();
   }, true);
 
-  const observer = new MutationObserver(schedulePatch);
-  observer.observe(document.documentElement, { subtree: true, childList: true });
-  window.addEventListener('resize', schedulePatch, { passive: true });
+  const shouldPatchStructure = records => records.some(record => [...record.addedNodes].some(node =>
+    node.nodeType === 1 && (node.matches?.('.modal-backdrop,.modal,form,.item-editor-row,.payment-editor-row,.osv-table') ||
+      node.querySelector?.('.modal,form,.item-editor-row,.payment-editor-row,.osv-table'))
+  ));
+  const observer = new MutationObserver(records => { if (shouldPatchStructure(records)) schedulePatch(); });
+  const modalRoot = document.getElementById('modal-root');
+  const appRoot = document.getElementById('root');
+  if (modalRoot) observer.observe(modalRoot, { subtree: true, childList: true });
+  if (appRoot) observer.observe(appRoot, { subtree: true, childList: true });
+  let resizeTimer = 0;
+  window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(schedulePatch, 120); }, { passive: true });
   window.addEventListener('load', schedulePatch, { once: true });
   schedulePatch();
 
