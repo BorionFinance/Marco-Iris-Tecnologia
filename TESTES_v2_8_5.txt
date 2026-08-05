@@ -1,0 +1,17 @@
+MARCO IRIS TECNOLOGIA — TESTES v2.8.5
+
+APROVADO
+- Tela de entrada renderizada sem campo de senha.
+- Tela de entrada renderizada sem campo de PIN.
+- Botão “Entrar com Google” preservado.
+- Criação de nova base criptografada em modo Google-only.
+- Bloqueio e reabertura automática da base sem senha adicional.
+- Criação controlada de envelope legado protegido por senha.
+- Migração do envelope legado para credencial vinculada à conta Google.
+- Senha antiga consumida somente na migração; reabertura seguinte sem novo pedido.
+- Biometria antiga ignorada no modo Google-only.
+- Verificação de sintaxe de todos os arquivos JavaScript concluída.
+- Manifest e service worker atualizados para v2.8.5.
+
+OBSERVAÇÃO
+O fluxo real de autorização OAuth depende das contas Google autorizadas e do ambiente publicado. A integração Google Drive existente foi preservada; não foram alterados Client ID, escopos, contas permitidas nem estrutura de pastas.

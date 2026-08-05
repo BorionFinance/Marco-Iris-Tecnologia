@@ -1,4 +1,4 @@
-const CLOUD_ONLY_VERSION='marco-iris-v2.8.4-marco-final-secure';
+const CLOUD_ONLY_VERSION='marco-iris-v2.8.5-google-only-access';
 
 self.addEventListener('install',event=>{
   event.waitUntil(self.skipWaiting());

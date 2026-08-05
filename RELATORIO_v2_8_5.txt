@@ -1,0 +1,17 @@
+MARCO IRIS TECNOLOGIA — ENTREGA v2.8.5
+Base recebida: v2.8.4
+
+ALTERAÇÃO PRINCIPAL
+- Removida a senha mestra da entrada do aplicativo.
+- Removido o PIN da tela de login.
+- A conta Google autorizada passa a ser a única etapa de acesso.
+- A criptografia dos dados no Google Drive foi preservada e agora usa credencial automática vinculada à identidade Google.
+- Bases criptografadas por versões anteriores são convertidas com segurança. Quando necessário, a senha antiga é solicitada apenas uma última vez para concluir a migração.
+- Tela de Configurações atualizada para não exibir troca de senha mestra ou chave de recuperação.
+- PWA, manifest, cache e service worker atualizados para v2.8.5.
+
+GARANTIAS PRESERVADAS
+- Google Drive continua sendo a fonte oficial.
+- Sem modo offline e sem base local de negócios.
+- Compatibilidade com dados existentes e migração não destrutiva.
+- Demais funções e identidade visual mantidas.

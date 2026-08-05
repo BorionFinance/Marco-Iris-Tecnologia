@@ -534,7 +534,7 @@
     const card = document.createElement('section');
     card.className = 'card full-settings-card vault-security-card-v280';
     card.dataset.vaultSecurityCardV280 = '1';
-    card.innerHTML = `<div class="card-header"><div><h2>Senha mestra e chave de recuperação</h2><p>A chave é baixada automaticamente somente na primeira ativação. Depois, estas ações ficam disponíveis aqui.</p></div>${typeof statusBadge === 'function' ? statusBadge('Criptografia ativa') : ''}</div><div class="toolbar"><div class="toolbar-left"><button type="button" class="btn secondary" data-action="vault-save-recovery-v280">${icon('download')} Gerar e salvar nova chave</button><button type="button" class="btn secondary" data-action="vault-change-password-v280">${icon('lock')} Trocar senha mestra</button></div></div><p class="small muted">Gerar uma nova chave invalida a chave de recuperação anterior. A senha mestra nunca é gravada no navegador ou no Google Drive.</p>`;
+    card.innerHTML = `<div class="card-header"><div><h2>Criptografia vinculada ao Google</h2><p>Os dados continuam criptografados antes de serem enviados ao Drive, mas o desbloqueio agora acontece automaticamente após a confirmação da conta autorizada.</p></div>${typeof statusBadge === 'function' ? statusBadge('Google protegido') : ''}</div><div class="list-row"><div class="list-row-main"><strong>Entrada sem senha adicional</strong><small>O login Google é a única etapa de acesso ao Marco Iris.</small></div>${icon('cloud')}</div>`;
     host.appendChild(card);
   }
 
@@ -675,20 +675,8 @@ Esta ação não poderá ser desfeita.`,
     toast(`${id} excluída definitivamente. A numeração final foi liberada para reutilização.${pendingDriveCleanup ? ` ${pendingDriveCleanup} arquivo(s) ficaram na fila segura de limpeza do Drive.` : ''}`, pendingDriveCleanup ? 'warn' : 'success');
   }
 
-  async function handleVaultAction(action) {
-    const vault = window.SecureJsonVault?.forApp?.({
-      appId: 'marco-iris-tecnologia',
-      appName: 'Marco Iris Tecnologia',
-      dialogTheme: 'marco',
-      credentialGroup: 'marco-iris-suite',
-      isSensitive: value => !!(value && typeof value === 'object' && value.appId === 'marco-iris-tecnologia' && value.dataByProfile)
-    });
-    if (!vault) throw new Error('O cofre criptografado não foi inicializado.');
-    const save = async () => {
-      await persist(action === 'password' ? 'Senha mestra alterada' : 'Chave de recuperação renovada', 'Cofre criptografado atualizado', { immediate: true });
-    };
-    if (action === 'password') await vault.changePassword(STATE, save);
-    else await vault.rotateRecovery(STATE, save);
+  async function handleVaultAction() {
+    return false;
   }
 
   // A exclusao financeira definitiva deve ficar disponivel em qualquer idade.
@@ -749,7 +737,7 @@ Esta ação não poderá ser desfeita.`,
       event.stopImmediatePropagation();
       button.disabled = true;
       try { await handleVaultAction(action.includes('password') ? 'password' : 'recovery'); }
-      catch (error) { toast(error.message || 'Não foi possível atualizar o cofre.', 'error'); }
+      catch (error) { toast(error.message || 'A proteção é gerenciada automaticamente pela conta Google.', 'error'); }
       finally { button.disabled = false; }
       return;
     }

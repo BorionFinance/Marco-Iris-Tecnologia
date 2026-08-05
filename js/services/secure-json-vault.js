@@ -765,7 +765,8 @@
     const isSensitive = typeof options?.isSensitive === 'function' ? options.isSensitive : (() => true);
     const dialogTheme = String(options?.dialogTheme || 'borion').trim().toLowerCase();
     const credentialGroup = String(options?.credentialGroup || appId).trim() || appId;
-    const autoDownloadRecovery = options?.autoDownloadRecovery !== false;
+    const googleOnlyAccess = options?.googleOnlyAccess === true;
+    const autoDownloadRecovery = options?.autoDownloadRecovery !== false && !googleOnlyAccess;
     if (!appId) fail('SECURE_VAULT_INVALID_APP');
     if (contexts.has(appId)) return contexts.get(appId);
 
@@ -774,6 +775,7 @@
     let key = null;
     let template = null;
     let plaintextMigrationPending = false;
+    let googleCredentialMigrationPending = false;
     let queue = Promise.resolve();
     let unlockPromise = null;
     let unlockVaultId = '';
@@ -790,6 +792,7 @@
       key = null;
       template = null;
       plaintextMigrationPending = false;
+      googleCredentialMigrationPending = false;
       unlockPromise = null;
       unlockVaultId = '';
       pendingRecovery = null;
@@ -821,15 +824,26 @@
         key = null;
         template = null;
         plaintextMigrationPending = false;
+        googleCredentialMigrationPending = false;
         fail('SECURE_VAULT_WRONG_OWNER');
       }
       return ownerBinding;
     }
 
+    async function googleAccountSecret() {
+      if (!googleOnlyAccess) fail('SECURE_VAULT_GOOGLE_ONLY_DISABLED');
+      if (!ownerId || !ownerBinding) fail('SECURE_VAULT_OWNER_REQUIRED');
+      // Chave automática e determinística por aplicativo + identidade Google.
+      // Ela elimina a senha adicional sem gravar segredos no navegador ou no Drive.
+      return await sha256Text(`${FORMAT}|${VERSION}|${appId}|GOOGLE_ACCOUNT_ONLY|${ownerId}|v1`);
+    }
+
     async function createEnvelope(value) {
       if (!ownerBinding) fail('SECURE_VAULT_OWNER_REQUIRED');
-      const password = credentialSecrets.get(credentialGroup) || await promptNewPassword(appId, appName, dialogTheme);
-      rememberCredential(password);
+      const password = googleOnlyAccess
+        ? await googleAccountSecret()
+        : (credentialSecrets.get(credentialGroup) || await promptNewPassword(appId, appName, dialogTheme));
+      if (!googleOnlyAccess) rememberCredential(password);
       const recoveryCode = generateRecoveryCode();
       const recoverySecret = canonicalRecoveryCode(recoveryCode);
       const vaultId = randomId();
@@ -844,6 +858,7 @@
         vaultId,
         ownerBinding,
         password: passwordWrap,
+        authMode: googleOnlyAccess ? 'google-account-v1' : 'master-password-v1',
         recovery: { ...recoveryWrap, createdAt: new Date().toISOString() },
         cipher: { name: 'AES-GCM', length: 256, tagLength: 128 },
         revision: 0,
@@ -854,7 +869,8 @@
       // envelope tiver sido realmente persistido pelo aplicativo.
       pendingRecovery = autoDownloadRecovery ? { vaultId, recoveryCode } : null;
       if (
-        !readBiometricRecord(appId, vaultId)
+        !googleOnlyAccess
+        && !readBiometricRecord(appId, vaultId)
         && await biometricPlatformAvailable()
         && await secureConfirm({ appName, theme: dialogTheme, title: 'Ativar biometria', message: 'Deseja usar a biometria deste celular nos próximos acessos?', submitLabel: 'Ativar biometria', cancelLabel: 'Agora não', note: false })
       ) {
@@ -950,6 +966,16 @@
     async function requestUnlock(envelope) {
       if (!ownerBinding) fail('SECURE_VAULT_OWNER_REQUIRED');
       if (envelope.ownerBinding !== ownerBinding) fail('SECURE_VAULT_WRONG_OWNER');
+      if (googleOnlyAccess) {
+        try {
+          const googleDek = await unwrapDek(envelope, await googleAccountSecret(), 'password');
+          await decryptEnvelope(envelope, googleDek);
+          return googleDek;
+        } catch (error) {
+          if (error?.code && !['SECURE_VAULT_AUTHENTICATION_FAILED', 'SECURE_VAULT_INVALID_SECRET'].includes(error.code)) throw error;
+          // Envelope antigo: segue para a confirmação única e migração automática.
+        }
+      }
       const sharedPassword = credentialSecrets.get(credentialGroup);
       if (sharedPassword) {
         try {
@@ -961,7 +987,7 @@
           forgetCredential();
         }
       }
-      if (readBiometricRecord(appId, envelope.vaultId)) {
+      if (!googleOnlyAccess && readBiometricRecord(appId, envelope.vaultId)) {
         try {
           const biometricDek = await unlockWithBiometric(appId, envelope);
           if (biometricDek) return biometricDek;
@@ -975,10 +1001,12 @@
           appId,
           appName,
           theme: dialogTheme,
-          title: 'Desbloquear dados',
-          message: 'Digite sua senha mestra para abrir a base criptografada.',
-          label: 'Senha mestra',
-          placeholder: 'Digite sua senha',
+          title: googleOnlyAccess ? 'Conversão para acesso pelo Google' : 'Desbloquear dados',
+          message: googleOnlyAccess
+            ? 'Esta base foi protegida por uma senha em uma versão anterior. Digite-a uma última vez para vincular os dados à conta Google e remover essa etapa dos próximos acessos.'
+            : 'Digite sua senha de proteção para abrir a base criptografada.',
+          label: googleOnlyAccess ? 'Senha antiga de proteção' : 'Senha de proteção',
+          placeholder: googleOnlyAccess ? 'Digite a senha usada anteriormente' : 'Digite sua senha',
           autocomplete: 'current-password',
           submitLabel: 'Desbloquear',
           cancelLabel: 'Cancelar',
@@ -989,7 +1017,8 @@
           const dek = await unwrapDek(envelope, password, 'password');
           rememberCredential(password);
           if (
-            !readBiometricRecord(appId, envelope.vaultId)
+            !googleOnlyAccess
+            && !readBiometricRecord(appId, envelope.vaultId)
             && await biometricPlatformAvailable()
             && await secureConfirm({ appName, theme: dialogTheme, title: 'Ativar biometria', message: 'Deseja usar a biometria deste celular nos próximos acessos?', submitLabel: 'Ativar biometria', cancelLabel: 'Agora não', note: false })
           ) {
@@ -1003,7 +1032,7 @@
           return dek;
         } catch (error) {
           if (error?.code && !['SECURE_VAULT_AUTHENTICATION_FAILED', 'SECURE_VAULT_INVALID_SECRET'].includes(error.code)) throw error;
-          unlockError = `Senha mestra incorreta. Restam ${2 - attempt} tentativa(s).`;
+          unlockError = `Senha incorreta. Restam ${2 - attempt} tentativa(s).`;
         }
       }
       const useRecovery = await secureConfirm({ appName, theme: dialogTheme, title: 'Usar chave de recuperação', message: 'As tentativas de senha terminaram. Deseja abrir a base com a chave de recuperação?', submitLabel: 'Usar chave', cancelLabel: 'Cancelar', note: false });
@@ -1032,6 +1061,16 @@
         if (generation !== lockGeneration) fail('SECURE_VAULT_LOCKED');
         key = unlocked;
         template = envelope;
+        if (googleOnlyAccess && envelope.authMode !== 'google-account-v1') {
+          const automaticWrap = await wrapDek(unlocked, await googleAccountSecret(), appId, envelope.vaultId, envelope.ownerBinding, 'password');
+          template = {
+            ...envelope,
+            password: automaticWrap,
+            authMode: 'google-account-v1',
+            googleCredentialMigratedAt: new Date().toISOString()
+          };
+          googleCredentialMigrationPending = true;
+        }
         return unlocked;
       })();
       unlockPromise = activePromise;
@@ -1063,7 +1102,7 @@
         key = await ensureSessionUnlocked(value);
       }
       const plain = await decryptEnvelope(value, key);
-      if (!template || template.vaultId !== value.vaultId || Number(value.revision) >= Number(template.revision || 0)) {
+      if (!template || template.vaultId !== value.vaultId || (!googleCredentialMigrationPending && Number(value.revision) > Number(template.revision || 0))) {
         template = value;
       }
       return plain;
@@ -1100,6 +1139,7 @@
     }
 
     async function changePassword(value, persistCallback) {
+      if (googleOnlyAccess) return false;
       if (!key || !template) fail('SECURE_VAULT_LOCKED');
       const currentPassword = await securePrompt({
         appId, appName, theme: dialogTheme,
@@ -1133,6 +1173,7 @@
     }
 
     async function rotateRecovery(value, persistCallback) {
+      if (googleOnlyAccess) return false;
       if (!key || !template) fail('SECURE_VAULT_LOCKED');
       const confirmed = await secureConfirm({
         appName, theme: dialogTheme,
@@ -1176,13 +1217,13 @@
       protectText,
       isEnvelope: looksLikeEnvelope,
       isSensitive,
-      needsMigration: () => plaintextMigrationPending,
-      markMigrated: () => { plaintextMigrationPending = false; },
+      needsMigration: () => plaintextMigrationPending || googleCredentialMigrationPending,
+      markMigrated: () => { plaintextMigrationPending = false; googleCredentialMigrationPending = false; },
       confirmSetupPersisted,
       changePassword,
       rotateRecovery,
       lock,
-      status: () => ({ appId, ownerBound: !!ownerBinding, unlocked: !!key, migrationPending: plaintextMigrationPending, vaultId: template?.vaultId || '', revision: Number(template?.revision || 0) })
+      status: () => ({ appId, ownerBound: !!ownerBinding, unlocked: !!key, googleOnlyAccess, authMode: template?.authMode || '', migrationPending: plaintextMigrationPending || googleCredentialMigrationPending, vaultId: template?.vaultId || '', revision: Number(template?.revision || 0) })
     });
     contexts.set(appId, context);
     return context;

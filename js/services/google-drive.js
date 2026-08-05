@@ -11,6 +11,7 @@
     appName:'Marco Iris Tecnologia',
     dialogTheme:'marco',
     credentialGroup:'marco-iris-suite',
+    googleOnlyAccess:true,
     isSensitive:value=>!!(value&&typeof value==='object'&&value.appId==='marco-iris-tecnologia'&&value.dataByProfile)
   });
   const IntegrationVault=window.SecureJsonVault.forApp({
@@ -18,6 +19,7 @@
     appName:'Integracao segura Borion',
     dialogTheme:'marco',
     credentialGroup:'marco-iris-suite',
+    googleOnlyAccess:true,
     autoDownloadRecovery:false,
     isSensitive:value=>!!(value&&typeof value==='object'&&(value.schema==='borion.interop.snapshot'||value.schema==='borion.interop.ack'))
   });
