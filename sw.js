@@ -1,4 +1,4 @@
-const CLOUD_ONLY_VERSION='marco-iris-v2.8.10-cabecalhos-lixeira-estoque-quadrado';
+const CLOUD_ONLY_VERSION='marco-iris-v2.8.11-cabecalho-ordem-pagamentos-rodape';
 
 self.addEventListener('install',event=>{
   event.waitUntil(self.skipWaiting());

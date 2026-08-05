@@ -1,0 +1,206 @@
+MARCO IRIS TECNOLOGIA — v2.8.8
+Rolagem livre, "Baixar estoque" enxuto e bolinha • como separador único
+
+------------------------------------------------------------
+1. ROLAGEM QUE NÃO FUNCIONAVA EM CIMA DA TABELA E DOS CARTÕES
+------------------------------------------------------------
+CAUSA ENCONTRADA
+Quando um elemento tem overflow em um só eixo (ex.: overflow-x:auto e
+overflow-y:visible), o navegador transforma o outro eixo em "auto"
+automaticamente. Com isso .table-wrap e os cartões dentro das janelas
+viravam áreas de rolagem nos DOIS eixos. Somado ao
+"overscroll-behavior: contain" aplicado na v2.8.7, o gesto vertical
+ficava preso dentro dessas caixas e a página não andava — exatamente as
+áreas rabiscadas nos prints.
+
+CORREÇÃO (css/v288-rolagem-bolinha-estoque.css)
+- .table-wrap continua rolando na horizontal, mas o eixo vertical volta a
+  repassar o gesto para a página (overscroll-behavior-y: auto).
+- Cartões, seções, blocos de detalhe e formulários dentro de #modal-root
+  deixam de ser áreas de rolagem (overflow: visible). Quem corta o excesso
+  horizontal continua sendo o corpo da janela.
+- Linhas e células clicáveis da lista de OSVs não sequestram mais o arrasto.
+- Os donos legítimos da rolagem NÃO foram tocados: .main no computador,
+  a própria página no celular e .modal-body dentro das janelas. Assim os
+  editores visuais de layout e de PDF continuam funcionando como antes.
+
+RESULTADO: rola em qualquer ponto da lista de OSVs, da ficha do cliente e
+da janela da OSV — inclusive por cima do nome, do equipamento, do status
+e do valor.
+
+------------------------------------------------------------
+2. BAIXAR ESTOQUE
+------------------------------------------------------------
+- Removido o ícone de três riscos (js/v284-marco-ajustes.js).
+- O texto "Baixar estoque" passa a ficar ao lado da caixa de seleção,
+  dentro da mesma pastilha.
+- Caixa de seleção menor (16px no computador, 18px no celular), cantos
+  arredondados e "certo" branco desenhado; fica verde-água quando marcada,
+  no mesmo verde de confirmação do sistema.
+- Pastilha mais baixa e mais discreta (38px de altura, 124px de largura),
+  com a coluna da linha de itens ajustada para a nova medida.
+- No celular ocupa a largura útil, com área de toque confortável.
+
+------------------------------------------------------------
+3. BOLINHA • COMO SEPARADOR ÚNICO
+------------------------------------------------------------
+- O ponto miúdo "·" foi substituído pela bolinha "•" com espaço dos dois
+  lados, em todo o sistema.
+- Cliente e CPF/CNPJ, equipamento e modelo, código e marca: nada mais
+  aparece colado.
+- js/v288-rolagem-bolinha-estoque.js faz a normalização de forma
+  idempotente (passar duas vezes não duplica nada) e acompanha
+  re-renderizações por MutationObserver.
+- js/v284-marco-ajustes.js voltou a usar a bolinha na coluna Equipamento
+  em vez de reescrever para "·".
+
+------------------------------------------------------------
+ARQUIVOS
+------------------------------------------------------------
+NOVOS
+  css/v288-rolagem-bolinha-estoque.css
+  js/v288-rolagem-bolinha-estoque.js
+ALTERADOS
+  js/v284-marco-ajustes.js  (sem ícone no estoque; bolinha na coluna Equipamento)
+  index.html                (registro dos novos arquivos, ?v=2.8.8)
+  sw.js                     (marco-iris-v2.8.8-rolagem-livre-bolinha-estoque)
+
+Nenhum arquivo removido. Nenhuma regra de dados, sincronização com o
+Google Drive ou geração de PDF foi alterada.
+
+
+============================================================
+COMPLEMENTO v2.8.9
+============================================================
+
+4. PAINÉIS ENCAVALADOS E CORTADOS PELA METADE
+CAUSA: fora do modo de edição, cada painel do detalhe continuava preso à
+altura salva na grade (grid-row com N linhas de 22px) somada a
+overflow:hidden. Quando o conteúdo crescia — o histórico de PDFs, por
+exemplo — ele era cortado no meio e o painel seguinte subia por cima.
+CORREÇÃO: as linhas da grade viraram minmax(22px, auto). A posição e a
+largura salvas continuam valendo; a altura passa a acompanhar o conteúdo.
+Alturas personalizadas viraram piso (min-height) em vez de teto.
+O modo de edição de layout mantém a geometria rígida, senão o arraste
+perderia a referência.
+
+5. REGRA GERAL DE ROLAGEM
+Nenhum elemento do aplicativo prende mais o gesto: onde não há rolagem
+própria, a página rola. Continuam com rolagem própria apenas as áreas
+que realmente rolam por dentro — corpo das janelas, menu lateral, área
+de conteúdo no computador, editores de layout e de PDF, listas de
+sugestão e o histórico de auditoria. A tabela é o único caso misto:
+segura o gesto na horizontal e repassa o vertical para a página.
+No celular nada fica travado: a página rola em qualquer ponto.
+
+
+============================================================
+COMPLEMENTO v2.8.10
+============================================================
+
+1. BOLINHA DUPLICADA (•  •) ENTRE NOME E CPF/CNPJ
+CAUSA: dois scripts diferentes inseriam o separador na mesma célula sem
+verificar um o outro — o js/v280-marco-solicitacoes.js (mais antigo) e o
+js/v288-...js (novo). Dependendo de qual rodava primeiro, o segundo não
+enxergava a bolinha do primeiro a tempo e inseria outra.
+CORREÇÃO: o script antigo não insere mais separador nenhum — só troca o
+texto "Ordens" por "OSVs" no cabeçalho da tabela de clientes. O v288 passa
+a ser o único responsável pela bolinha em todo o sistema.
+Aproveitei para deixar o espaço ao redor da bolinha mais enxuto.
+
+2 e 4. CABEÇALHOS DAS JANELAS COM TUDO AMONTOADO
+CAUSA: a barra "Salvar layout / Cancelar / Restaurar padrão" entrava como
+mais um item solto dentro do grid de 3 colunas do cabeçalho, sem linha
+própria — dependendo da ordem de inserção no HTML, o motor de layout
+tentava encaixá-la na mesma linha do título, cortando tudo junto.
+Na ficha do cliente (que remove o cabeçalho de verdade e usa uma caixinha
+flutuante de 38x38 no canto para editar/fechar) havia um problema extra:
+ao entrar no modo de edição, o próprio sistema reescrevia o botão de
+editar layout com ícone + texto "Salvar layout" — e esse texto não cabia
+na caixinha de 38px, espremendo tudo.
+CORREÇÃO:
+- O cabeçalho ganhou 2 linhas fixas: título, editar layout e fechar
+  sempre em cima; a barra de salvar/cancelar sempre embaixo.
+- Na ficha do cliente, o texto que não cabia na caixinha volta a virar
+  só ícone (com o rótulo completo preservado no title, para quem usa
+  leitor de tela), e a caixinha de controles ganhou uma segunda linha
+  para a barra de salvar/cancelar, com a altura real medida ao vivo
+  para o conteúdo abaixo nunca ficar escondido nem sobrar espaço vazio.
+
+3. LIXEIRA FORA DO LUGAR (EDITAR LANÇAMENTO)
+CAUSA: o botão de excluir definitivamente ficava solto, flutuando com
+posição absoluta no meio do formulário.
+CORREÇÃO: o botão passou a viver dentro do cabeçalho da janela, ao lado
+do editar layout e do fechar — a mesma lógica usada nas outras janelas
+do sistema.
+
+5. "BAIXAR ESTOQUE" — DE RETÂNGULO PARA QUADRADO
+A caixa de seleção com o texto ao lado virou um quadrado: caixa de
+seleção em cima, texto "Baixar estoque" centralizado embaixo, em vez de
+lado a lado. 64x64 no computador, 68x68 no celular.
+
+ARQUIVOS ALTERADOS NESTA RODADA
+  js/v288-rolagem-bolinha-estoque.js  (dono único da bolinha; normaliza o
+                                        botão de editar layout na ficha do
+                                        cliente; mede a barra flutuante)
+  css/v288-rolagem-bolinha-estoque.css (cabeçalho em 2 linhas; lixeira no
+                                        cabeçalho; quadrado do estoque)
+  js/v280-marco-solicitacoes.js       (não insere mais bolinha; lixeira do
+                                        lançamento financeiro vai para o
+                                        cabeçalho)
+  js/v284-marco-ajustes.js            (limpeza de texto residual da coluna
+                                        Equipamento, sem inserir bolinha)
+  css/v281-marco-final.css            (removida a regra antiga que
+                                        flutuava a lixeira sobre o
+                                        formulário de lançamento)
+  index.html, sw.js                   (?v=2.8.10)
+
+
+============================================================
+COMPLEMENTO v2.8.11
+============================================================
+
+1. ORDEM DOS BOTÕES NO CABEÇALHO DAS JANELAS
+Reescrevi o cabeçalho para uma única fileira, com ordem fixa da esquerda
+para a direita: Título → Fechar (X) → Salvar layout (só o ícone) →
+Restaurar padrão → Cancelar. O texto de ajuda ("Grade livre: arraste...")
+quebra para a linha de baixo, sozinho, nunca mais disputando espaço com
+os botões. Vale para "Novo cliente", "Editar cliente", "Editar OSV" e
+qualquer outra janela com o mesmo cabeçalho.
+O botão de editar layout agora mostra só o símbolo em todo lugar — o
+rótulo completo ("Editar layout" / "Salvar layout") continua disponível
+para quem usa leitor de tela, só não aparece mais como texto visível
+espremido dentro da caixinha de 38px.
+Botões vizinhos (Cancelar, Restaurar padrão, ícones) ganharam a mesma
+altura, para tudo ficar alinhado.
+
+2. PAGAMENTOS — OBSERVAÇÃO E VALOR COM TAXA
+- "Observação" e "Valor com taxa" ficam lado a lado, alinhados no topo:
+  Observação ocupa a largura maior à esquerda, Valor com taxa fica mais
+  estreito à direita. Quando não há taxa (Pix, dinheiro), Observação
+  ocupa a linha toda.
+- O cantinho de esticar a Observação volta a funcionar nas duas direções
+  (antes só esticava para os lados).
+- O aviso fixo "Informe a data de vencimento do pagamento combinado."
+  foi removido — ele aparecia assim que a pessoa marcava "agendado",
+  antes mesmo de tentar salvar. A validação continua acontecendo ao
+  salvar (ainda impede salvar sem data de vencimento quando agendado),
+  só não fica mais essa mensagem grudada na tela o tempo todo.
+- Com o aviso fora do caminho, a "Data de vencimento" volta a ficar
+  alinhada com Valor líquido / Forma de pagamento / Data do pagamento
+  na mesma fileira, e a lixeira de excluir o pagamento continua à
+  direita de tudo.
+
+3. RODAPÉ DAS JANELAS SEMPRE FIXO
+Reforcei a regra que gruda os botões (Cancelar, Salvar, WhatsApp, PDF
+etc.) no rodapé da janela — agora eles ficam sempre visíveis, não
+importa até onde a pessoa role o conteúdo por dentro da janela.
+
+ARQUIVOS NESTA RODADA
+  css/v289-cabecalho-pagamentos.css  (novo — cabeçalho em fileira única,
+                                       Observação/Valor com taxa lado a
+                                       lado, cantinho de esticar, rodapé
+                                       sempre fixo)
+  js/pts-completo.js                 (removido o aviso fixo de vencimento
+                                       dos dois formulários de pagamento)
+  index.html, sw.js                  (?v=2.8.11)

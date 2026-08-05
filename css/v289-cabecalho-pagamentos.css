@@ -1,0 +1,211 @@
+/* Marco Iris Tecnologia v2.8.11
+   1. Cabeçalho das janelas: ordem fixa X · Salvar (só ícone) · Restaurar
+      padrão · Cancelar, tudo numa linha só, sempre alinhado.
+   2. Pagamentos: Observação e Valor com taxa lado a lado, alinhados no
+      topo; o aviso fixo de vencimento sai; o cantinho de esticar a
+      Observação volta a funcionar nas duas direções.
+   Tudo pensado primeiro para o celular, e sempre com caixas do mesmo
+   tamanho quando ficam próximas umas das outras. */
+
+/* ============================================================
+   1. CABEÇALHO DAS JANELAS
+   ============================================================
+   Uma linha só, com ordem fixa da esquerda para a direita:
+   Título (cresce) → Fechar (X) → Salvar layout (ícone) →
+   Restaurar padrão → Cancelar.
+   O texto de ajuda ("Grade livre...") quebra para uma linha própria,
+   sempre abaixo, nunca disputando espaço com os botões. */
+#modal-root .modal-header-v284 {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  row-gap: 8px !important;
+  column-gap: 8px !important;
+}
+#modal-root .modal-header-v284 > h2,
+#modal-root .modal-header-v284 .modal-title-v284 {
+  order: 0 !important;
+  flex: 1 1 160px !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+}
+#modal-root .modal-header-v284 .modal-close-v280,
+#modal-root .modal-header-v284 .modal-close-v284 {
+  order: 10 !important;
+  position: static !important;
+  inset: auto !important;
+  flex: 0 0 38px !important;
+  width: 38px !important;
+  height: 38px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+#modal-root .modal-header-v284 .modal-header-delete-v288 {
+  order: 11 !important;
+  position: static !important;
+  inset: auto !important;
+  flex: 0 0 38px !important;
+  width: 38px !important;
+  height: 38px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  display: inline-grid !important;
+  place-items: center;
+}
+#modal-root .modal-header-v284 .modal-layout-icon-v280,
+#modal-root .modal-header-v284 .modal-layout-v284 {
+  order: 20 !important;
+  position: static !important;
+  inset: auto !important;
+  flex: 0 0 38px !important;
+  width: 38px !important;
+  height: 38px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+#modal-root .modal-header-v284 .layout-toolbar-v256 {
+  order: 30 !important;
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  gap: 8px !important;
+  flex: 0 0 auto !important;
+  margin: 0 !important;
+}
+/* Dentro da barra: Restaurar padrão antes de Cancelar. */
+#modal-root .modal-header-v284 .layout-toolbar-v256 [data-action="reset-layout-v256"] {
+  order: 1 !important;
+}
+#modal-root .modal-header-v284 .layout-toolbar-v256 [data-action="cancel-layout-v256"] {
+  order: 2 !important;
+}
+#modal-root .modal-header-v284 .layout-toolbar-v256 small {
+  order: 3 !important;
+  flex-basis: 100% !important;
+  max-width: none !important;
+  white-space: normal !important;
+}
+/* Botões vizinhos com a mesma altura, para tudo ficar alinhado. */
+#modal-root .modal-header-v284 .layout-toolbar-v256 button {
+  min-height: 38px !important;
+  height: 38px !important;
+}
+
+/* O ícone de editar layout mostra só o símbolo — o rótulo completo
+   ("Editar layout" / "Salvar layout") continua disponível no title,
+   para quem usa leitor de tela. O texto visível some via JS
+   (js/v289-cabecalho-pagamentos.js), aqui só garantimos que não sobre
+   espaço reservado para ele. */
+#modal-root .modal-header-v284 .modal-layout-icon-v280,
+#modal-root .modal-header-v284 .modal-layout-v284 {
+  display: inline-grid !important;
+  place-items: center;
+  font-size: 0 !important;
+}
+#modal-root .modal-header-v284 .modal-layout-icon-v280 svg,
+#modal-root .modal-header-v284 .modal-layout-v284 svg {
+  font-size: initial;
+}
+
+/* A lixeira de excluir definitivamente (quando existe) some da regra
+   antiga de colunas fixas — agora é só mais um item da fileira, na
+   ordem certa. */
+#modal-root .modal-header-v284:has(.modal-header-delete-v288),
+#modal-root .modal-header-v284:has(.modal-header-delete-v288):not(:has(.modal-layout-v284)):not(:has(.modal-layout-icon-v280)) {
+  grid-template-columns: none !important;
+}
+
+@media (max-width: 760px) {
+  #modal-root .modal-header-v284 .modal-close-v280,
+  #modal-root .modal-header-v284 .modal-close-v284,
+  #modal-root .modal-header-v284 .modal-header-delete-v288,
+  #modal-root .modal-header-v284 .modal-layout-icon-v280,
+  #modal-root .modal-header-v284 .modal-layout-v284 {
+    flex-basis: 36px !important;
+    width: 36px !important;
+    height: 36px !important;
+  }
+}
+
+/* ============================================================
+   2. PAGAMENTOS — Observação e Valor com taxa lado a lado, no topo
+   ============================================================ */
+.payment-secondary-left-v280 {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 220px) !important;
+  align-items: start !important;
+  gap: 12px !important;
+}
+.payment-secondary-left-v280 .payment-note {
+  grid-column: 1 !important;
+  grid-row: 1 !important;
+}
+.payment-secondary-left-v280 .fee-field {
+  grid-column: 2 !important;
+  grid-row: 1 !important;
+}
+/* Sem taxa (Pix, dinheiro...): a Observação ocupa a largura toda. */
+.payment-secondary-left-v280 .fee-field.is-hidden + .payment-note,
+.payment-secondary-left-v280:has(.fee-field.is-hidden) .payment-note {
+  grid-column: 1 / -1 !important;
+}
+
+/* O cantinho para esticar a Observação volta a funcionar nas duas
+   direções — antes só esticava na horizontal, e parecia travado. */
+.payment-notes-textarea-v280,
+.payment-notes-standalone-v280 {
+  resize: both !important;
+  min-height: 60px !important;
+}
+
+@media (max-width: 760px) {
+  .payment-secondary-left-v280 {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .payment-secondary-left-v280 .payment-note,
+  .payment-secondary-left-v280 .fee-field {
+    grid-column: 1 !important;
+  }
+  .payment-notes-textarea-v280,
+  .payment-notes-standalone-v280 {
+    resize: vertical !important;
+  }
+}
+@container osv-payments (max-width: 900px) {
+  #modal-root form[data-form="order"] .form-section:has(#order-payments-editor) .payment-secondary-left-v280 {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  #modal-root form[data-form="order"] .form-section:has(#order-payments-editor) .payment-secondary-left-v280 .payment-note,
+  #modal-root form[data-form="order"] .form-section:has(#order-payments-editor) .payment-secondary-left-v280 .fee-field {
+    grid-column: 1 !important;
+  }
+}
+
+/* ============================================================
+   3. RODAPÉ DAS JANELAS SEMPRE VISÍVEL
+   ============================================================
+   Salvar, Cancelar, WhatsApp e demais ações do rodapé ficam grudados
+   na parte de baixo da janela, visíveis o tempo todo — não importa
+   até onde a página role por dentro. Reforça a regra existente com
+   mais força, para vencer qualquer estado condicional antigo. */
+#modal-root .modal-backdrop .modal .form-actions,
+#modal-root .modal-backdrop .modal .osv-form-actions,
+#modal-root .modal-backdrop .modal .osv-form-actions-v280,
+#modal-root .modal .form-actions,
+#modal-root .modal .osv-form-actions,
+#modal-root .modal .osv-form-actions-v280 {
+  position: sticky !important;
+  bottom: 0 !important;
+  z-index: 40 !important;
+  background: var(--modal-surface, #0a2748) !important;
+  box-shadow: 0 -14px 30px rgba(0, 8, 22, .18) !important;
+}
+
+/* O botão de editar layout da ficha do cliente (caixinha flutuante)
+   também vira só ícone com o mesmo truque — sem depender só do JS. */
+#modal-root .modal-floating-controls-v281 > [data-action="toggle-layout-v256"] {
+  font-size: 0 !important;
+}
+#modal-root .modal-floating-controls-v281 > [data-action="toggle-layout-v256"] svg {
+  font-size: initial;
+}
