@@ -4,7 +4,7 @@
  * Camada integrada de regras, telas e migração. Executada antes do boot.
  */
 (() => {
-  const PTS_VERSION = window.MARCO_APP_VERSION||'2.8.14';
+  const PTS_VERSION = window.MARCO_APP_VERSION||'2.8.16';
   const OPERATIONAL_STATUSES = ['Orçamento','Em andamento','Aguardando peça','Concluída','Cancelada'];
   const PAYMENT_METHODS = ['Pix','Dinheiro','Débito','Crédito (À vista)','Crédito 2x','Crédito 3x','Crédito 4x','Crédito 5x','Crédito 6x','Crédito 7x','Crédito 8x','Crédito 9x','Crédito 10x','Crédito 11x','Crédito 12x','Boleto','Transferência','Outro'];
   const EQUIPMENT_TYPES = ['Computador Gamer','Computador de Escritório','Notebook Gamer','Notebook','Celular','Monitor','Impressora','Console','Game Stick','Rack','Teclado','Roteador','Mouse'];
@@ -13,8 +13,11 @@
   const ENTITY_PREFIXES = new Set(['OSV','CLI','PRD','SRV','INS','ITM','MOV','REC','DES','AGE','TER']);
   const STATUS_MAP = {
     'em analise':'Orçamento','aguardando aprovacao':'Orçamento','orcamento':'Orçamento',
-    'em andamento':'Em andamento','aguardando peca':'Aguardando peça','pronto para retirada':'Concluída',
-    'concluido':'Concluída','concluida':'Concluída','cancelado':'Cancelada','cancelada':'Cancelada'
+    'em andamento':'Em andamento','aguardando peca':'Aguardando peça',
+    'pronto para retirada':'Concluída','pronto para entrega':'Concluída',
+    'concluido':'Concluída','concluida':'Concluída','finalizado':'Concluída','finalizada':'Concluída',
+    'entregue':'Concluída','fechado':'Concluída','fechada':'Concluída',
+    'cancelado':'Cancelada','cancelada':'Cancelada'
   };
   const FINANCIAL_MAP = {'pendente':'Em aberto','em aberto':'Em aberto','atrasado':'Vencido','vencido':'Vencido','parcial':'Parcial','pago':'Pago','cancelado':'Cancelado'};
   const UF_OPTIONS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
@@ -72,7 +75,14 @@
   function normalizedBrPhone(value){const result=normalizeBrazilianPhone(value);return result.valid?result.normalizedDigits:'';}
   function phoneFields(value){const result=normalizeBrazilianPhone(value);return result.valid?{phone:result.formatted,phoneNormalized:result.normalizedDigits,phoneE164:result.e164,phoneReviewRequired:false}:{phone:String(value||''),phoneNormalized:'',phoneE164:'',phoneReviewRequired:!!String(value||'').trim()};}
   function canonicalOperationalStatus(value){return STATUS_MAP[normalizeText(value)]||OPERATIONAL_STATUSES.find(x=>normalizeText(x)===normalizeText(value))||'Orçamento';}
-  function isCancelledOrder(order){return normalizeText(order?.status)==='cancelada';}
+  function isInactiveOrder(order){return normalizeText(order?.registrationStatus||'Ativo')==='inativo';}
+  function isCancelledOrder(order){const status=normalizeText(order?.status);return status==='cancelada'||status==='cancelado'||status.startsWith('cancel');}
+  function isClosedOrder(order){
+    if(!order||isInactiveOrder(order))return true;
+    const status=normalizeText(order.status),canonical=canonicalOperationalStatus(order.status);
+    return canonical==='Concluída'||canonical==='Cancelada'||status.startsWith('conclu')||status.startsWith('finaliz')||status.startsWith('entreg')||status.startsWith('fechad')||status==='pronto para retirada'||status==='pronto para entrega';
+  }
+  function isOpenOrder(order){return !!order&&!isInactiveOrder(order)&&!isClosedOrder(order);}
   realizedPaymentValue = function(orderId){const order=findOrder(orderId);return order&&isCancelledOrder(order)?0:baseRealizedPaymentValue(orderId);};
   function paymentIsCancelled(payment){return normalizeText(payment?.status)==='cancelado'||!!payment?.cancelledAt;}
   function paymentIsPaid(payment){return !paymentIsCancelled(payment)&&!!payment?.paymentDate;}
@@ -121,7 +131,7 @@
   function safeJson(value){try{return JSON.parse(JSON.stringify(value));}catch(_){return null;}}
   function findByAnyCode(list,code){const c=String(code||'').toUpperCase();return list.find(x=>String(x.id||x.code||'').toUpperCase()===c);}
   function activeItems(list){return list.filter(x=>normalizeText(x.status)!=='inativo');}
-  function orderNotCancelled(order){return order&&order.registrationStatus!=='Inativo'&&!isCancelledOrder(order);}
+  function orderNotCancelled(order){return !!order&&!isInactiveOrder(order)&&!isCancelledOrder(order);}
   function currentProfileSettings(){return data().settings;}
   lowStockItems = function(){
     const rows=[];
@@ -494,7 +504,7 @@
 
 
   renderDashboard = function(){
-    const d=data(),month=today().slice(0,7),orders=d.serviceOrders.filter(orderNotCancelled),open=orders.filter(o=>!['concluida','cancelada'].includes(normalizeText(o.status)));
+    const d=data(),month=today().slice(0,7),orders=d.serviceOrders.filter(orderNotCancelled),open=d.serviceOrders.filter(isOpenOrder);
     const paidMonth=d.payments.filter(p=>normalizeText(p.type)==='receita'&&paymentIsPaid(p)&&monthKey(p.paymentDate)===month&&!isCancelledOrder(findOrder(p.orderId))).reduce((sum,p)=>sum+num(p.value),0);
     const expenses=d.payments.filter(p=>normalizeText(p.type)==='despesa'&&paymentIsPaid(p)&&monthKey(p.paymentDate)===month).reduce((sum,p)=>sum+num(p.value),0);
     const receivables=orders.map(o=>({order:o,client:findClient(o.clientId),...orderFinancialInfo(o)})).filter(x=>x.balance>.005).sort((a,b)=>Number(b.overdue)-Number(a.overdue)||(a.dueDate||'9999').localeCompare(b.dueDate||'9999'));

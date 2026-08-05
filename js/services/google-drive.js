@@ -331,7 +331,7 @@
   }
   async function writeInstallationManifest(rootIdValue,structure,state,user){
     if(!rootIdValue||!structure||!state)return null;
-    const manifest={schema:'marco.iris.installation',schemaVersion:1,appId:'marco-iris-tecnologia',appVersion:window.MARCO_APP_VERSION||'2.8.14',createdOrUpdatedAt:new Date().toISOString(),companyInstanceId:companyIdOf(state),googleAccount:String(user?.email||''),rootFolderId:rootIdValue,folders:Object.fromEntries(Object.entries(FOLDERS).map(([key,name])=>[key,{name,id:structure[key]||''}]))};
+    const manifest={schema:'marco.iris.installation',schemaVersion:1,appId:'marco-iris-tecnologia',appVersion:window.MARCO_APP_VERSION||'2.8.16',createdOrUpdatedAt:new Date().toISOString(),companyInstanceId:companyIdOf(state),googleAccount:String(user?.email||''),rootFolderId:rootIdValue,folders:Object.fromEntries(Object.entries(FOLDERS).map(([key,name])=>[key,{name,id:structure[key]||''}]))};
     const file=await resolveIntegrationFile(rootIdValue,INSTALLATION_FILE,true,manifest);
     await updateJson(file.id,manifest);
     const confirmed=await readJson(file.id);
@@ -587,7 +587,7 @@
     async folderStatus(){const {structure}=await this.ensureConnection(false);return Object.entries(FOLDERS).map(([key,name])=>({key,name,id:structure[key],url:`https://drive.google.com/drive/folders/${structure[key]}`}));},
     /* BORION INTEROP v1.0.0 — protected transport seam. */
     async integrationFolderId(){const {structure}=await this.ensureConnection(false);return structure.integration;},
-    /* V2.8.14 — INTEROP EM TEXTO CLARO (bridge + ack).
+    /* V2.8.16 — INTEROP EM TEXTO CLARO (bridge + ack).
        Estes dois arquivos são escritos por um aplicativo e lidos por OUTRO
        (Marco Iris <-> Borion Finance). Cada lado cifrava com uma chave própria
        do seu próprio cofre, então o outro lado nunca conseguia abrir o arquivo:
