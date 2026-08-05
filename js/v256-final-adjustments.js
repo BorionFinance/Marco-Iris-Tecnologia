@@ -5,7 +5,7 @@
  * somente apresentação, filtros, cliques e personalização visual.
  */
 (() => {
-  const VERSION='2.8.8';
+  const VERSION='2.8.7';
   const ORDER_STATUSES=['Orçamento','Em andamento','Aguardando peça','Concluída','Cancelada'];
   const INTERACTIVE_SELECTOR='button,a,input,select,textarea,label,summary,details,[role="button"],[contenteditable="true"]';
   const ENTITY_EDIT_ACTION={service:'edit-service',product:'edit-product',supply:'edit-supply',movement:'edit-stock-movement'};

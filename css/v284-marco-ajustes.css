@@ -75,43 +75,38 @@
   place-items: center;
 }
 
-/* Baixar estoque: visual mais limpo, sem ícone de três riscos. */
+/* Baixar estoque: checkbox e ícone no padrão visual do sistema. */
 #modal-root form[data-form="order"] .stock-check-v284 {
-  display: inline-grid !important;
-  grid-template-columns: 16px minmax(0, 1fr);
+  display: grid !important;
+  grid-template-columns: 20px minmax(0, 1fr);
   align-items: center !important;
   justify-content: start !important;
-  gap: 6px;
-  min-height: 38px;
-  padding: 6px 8px !important;
-  border: 1px solid rgba(96, 183, 255, .22);
-  border-radius: 12px;
-  background: rgba(8, 46, 85, .42);
+  gap: 7px;
+  min-height: 42px;
+  padding: 7px 8px !important;
+  border: 1px solid rgba(96, 183, 255, .24);
+  border-radius: 11px;
+  background: rgba(10, 54, 96, .56);
   cursor: pointer;
 }
-#modal-root form[data-form="order"] .stock-check-v284:hover {
-  border-color: rgba(120, 198, 255, .34);
-  background: rgba(9, 54, 99, .5);
-}
 #modal-root form[data-form="order"] .stock-check-v284 input {
-  width: 14px !important;
-  height: 14px !important;
+  width: 18px !important;
+  height: 18px !important;
   margin: 0 !important;
   accent-color: #27d7a1;
 }
 #modal-root form[data-form="order"] .stock-check-content-v284 {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
+  gap: 5px;
   min-width: 0;
-  font-size: .68rem;
-  line-height: 1.05;
+  font-size: .72rem;
+  line-height: 1.1;
   text-align: left;
 }
-#modal-root form[data-form="order"] .stock-check-title-v284 {
-  display: block;
-  color: #d9ebfb;
-  font-weight: 700;
+#modal-root form[data-form="order"] .stock-check-content-v284 svg {
+  flex: 0 0 auto;
 }
 
 /* O usuário digita o valor total da maquininha; a taxa aparece calculada no resumo. */

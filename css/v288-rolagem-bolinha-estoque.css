@@ -1,0 +1,399 @@
+/* Marco Iris Tecnologia v2.8.8
+   1. Rolagem livre: nenhuma caixa interna prende mais o gesto do dedo ou da roda do mouse.
+   2. "Baixar estoque": caixa de seleção menor, sem o ícone de três riscos, com o texto ao lado.
+   3. Separador padrão do sistema: bolinha "•" com espaço, no lugar do ponto "·" miúdo.
+   Tudo pensado primeiro para o celular. */
+
+/* ============================================================
+   1. ROLAGEM — a página volta a rolar em cima de qualquer área
+   ============================================================
+   A causa: caixas com overflow em um eixo viram área de rolagem nos DOIS eixos.
+   Com "overscroll-behavior: contain" elas engoliam o gesto vertical e nada acontecia.
+   A tabela continua rolando na horizontal; o gesto vertical sempre passa adiante. */
+.table-wrap,
+#root .table-wrap,
+#modal-root .table-wrap {
+  overscroll-behavior-x: contain !important;
+  overscroll-behavior-y: auto !important;
+  touch-action: pan-x pan-y !important;
+}
+.table-wrap .table,
+.table-wrap tbody,
+.table-wrap tr,
+.table-wrap td,
+.table-wrap th {
+  touch-action: pan-x pan-y !important;
+  overscroll-behavior: auto !important;
+}
+
+/* Na lista, nada além da tabela pode capturar a rolagem. */
+#root .card,
+#root section.card,
+#root .view-mode-content,
+#root .detail-grid,
+#root .detail-grid > div,
+#root .list-row,
+#root .definition-list,
+#root .kpi,
+#root .agenda-day-group {
+  overscroll-behavior: auto !important;
+}
+
+/* Nas janelas, os cartões só existiam com overflow para cortar excesso horizontal —
+   e era justamente isso que travava o dedo. Quem corta é o corpo do modal. */
+#modal-root .card:not(.google-calendar):not(.personalization-hub-v221),
+#modal-root section.card:not(.google-calendar):not(.personalization-hub-v221),
+#modal-root .form-section,
+#modal-root .detail-grid,
+#modal-root .detail-grid > div,
+#modal-root .detail-hero,
+#modal-root .order-detail-v280,
+#modal-root .client-detail-v281,
+#modal-root .list-row,
+#modal-root .definition-list,
+#modal-root .media-grid,
+#modal-root .order-financial-breakdown,
+#modal-root .modal-form-scroll,
+#modal-root form {
+  overflow: visible !important;
+  overscroll-behavior: auto !important;
+  touch-action: auto !important;
+}
+
+/* Os donos legítimos da rolagem continuam intactos e NÃO são tocados aqui:
+   no computador é a área de conteúdo (.main), no celular é a própria página,
+   e dentro das janelas é o corpo do modal (.modal-body). Mexer neles quebraria
+   os editores visuais de layout e de PDF, que rolam por conta própria. */
+
+/* Linhas e células clicáveis não podem sequestrar o arrasto do dedo. */
+#view-root tbody tr,
+#view-root .clickable-row-v256,
+#view-root .code-link,
+#view-root .text-link,
+#view-root .inline-status-shell {
+  touch-action: pan-x pan-y !important;
+}
+
+@media (max-width: 900px) {
+  /* No celular quem rola é o documento; nada interno disputa o gesto. */
+  .content,
+  .view-mode-content,
+  #view-root,
+  #view-root .card,
+  #view-root .table-wrap {
+    overscroll-behavior-y: auto !important;
+  }
+  #view-root .table-wrap {
+    touch-action: pan-x pan-y !important;
+  }
+}
+
+/* ============================================================
+   2. BAIXAR ESTOQUE — caixa menor, sem ícone, texto ao lado
+   ============================================================ */
+#modal-root form[data-form="order"] .stock-check,
+#modal-root form[data-form="order"] .stock-check-v284,
+#modal-root form[data-form="order"] #order-items-editor .stock-check,
+#modal-root form[data-form="order"] #order-items-editor .stock-check-v284 {
+  display: grid !important;
+  grid-template-columns: 16px minmax(0, 1fr) !important;
+  align-items: center !important;
+  justify-content: start !important;
+  gap: 7px !important;
+  width: 124px !important;
+  min-width: 124px !important;
+  min-height: 38px !important;
+  padding: 6px 9px !important;
+  border: 1px solid rgba(96, 183, 255, .20) !important;
+  border-radius: 12px !important;
+  background: rgba(8, 40, 74, .52) !important;
+  cursor: pointer;
+  transition: border-color .16s ease, background .16s ease, box-shadow .16s ease;
+}
+#modal-root form[data-form="order"] .stock-check:hover {
+  border-color: rgba(96, 183, 255, .38) !important;
+  background: rgba(11, 52, 94, .66) !important;
+}
+/* Marcado: fica verde-água, o mesmo verde de confirmação do sistema. */
+#modal-root form[data-form="order"] .stock-check:has(input:checked) {
+  border-color: rgba(39, 215, 161, .52) !important;
+  background: rgba(18, 100, 78, .30) !important;
+  box-shadow: inset 0 0 0 1px rgba(39, 215, 161, .16);
+}
+#modal-root form[data-form="order"] .stock-check:has(input:disabled) {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+/* A caixa fica sempre à esquerda e o texto à direita, qualquer que seja a ordem no HTML. */
+#modal-root form[data-form="order"] .stock-check input[type="checkbox"] {
+  grid-column: 1 !important;
+  grid-row: 1 !important;
+  justify-self: center;
+}
+#modal-root form[data-form="order"] .stock-check > span {
+  grid-column: 2 !important;
+  grid-row: 1 !important;
+}
+
+/* A caixa de seleção em si: menor, arredondada e com o "certo" desenhado. */
+#modal-root form[data-form="order"] .stock-check input[type="checkbox"] {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  width: 16px !important;
+  height: 16px !important;
+  min-width: 16px !important;
+  min-height: 16px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 1.5px solid rgba(126, 190, 255, .44) !important;
+  border-radius: 5px !important;
+  background: rgba(3, 20, 40, .72) !important;
+  background-repeat: no-repeat !important;
+  background-position: center !important;
+  background-size: 11px 11px !important;
+  cursor: inherit;
+  transition: background-color .16s ease, border-color .16s ease;
+}
+#modal-root form[data-form="order"] .stock-check input[type="checkbox"]:checked {
+  border-color: #27d7a1 !important;
+  background-color: #1fbf8d !important;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E") !important;
+}
+#modal-root form[data-form="order"] .stock-check input[type="checkbox"]:focus-visible {
+  outline: 2px solid rgba(79, 165, 255, .7);
+  outline-offset: 2px;
+}
+
+/* O texto acompanha a caixa, alinhado à esquerda e sem quebra feia. */
+#modal-root form[data-form="order"] .stock-check-content-v284 {
+  display: block !important;
+  grid-template-columns: none !important;
+  min-width: 0;
+  font-size: .64rem !important;
+  font-weight: 700;
+  line-height: 1.15 !important;
+  letter-spacing: .01em;
+  text-align: left !important;
+  color: #b9d3ee;
+}
+#modal-root form[data-form="order"] .stock-check-content-v284 span {
+  display: block;
+}
+#modal-root form[data-form="order"] .stock-check-content-v284 svg {
+  display: none !important;
+}
+#modal-root form[data-form="order"] .stock-check:has(input:checked) .stock-check-content-v284 {
+  color: #b8f2dd;
+}
+/* Marcação antiga (texto quebrado em duas linhas no HTML original). */
+#modal-root form[data-form="order"] .stock-check > span:not(.stock-check-content-v284) {
+  font-size: .64rem !important;
+  font-weight: 700;
+  line-height: 1.15 !important;
+  text-align: left !important;
+  color: #b9d3ee;
+}
+#modal-root form[data-form="order"] .stock-check > span br {
+  display: none;
+}
+
+/* A coluna da linha de itens acompanha a nova largura. */
+#modal-root form[data-form="order"] #order-items-editor .item-editor-row,
+#modal-root form[data-form="order"] #order-items-editor .item-editor-row-v280 {
+  grid-template-columns: 24px minmax(102px, .68fr) minmax(240px, 2.3fr) 62px minmax(112px, .8fr) minmax(112px, .8fr) 124px 42px !important;
+}
+
+@media (max-width: 900px) {
+  /* Celular: o campo ocupa a largura útil e a área de toque continua confortável. */
+  #modal-root form[data-form="order"] .stock-check,
+  #modal-root form[data-form="order"] .stock-check-v284,
+  #modal-root form[data-form="order"] #order-items-editor .stock-check,
+  #modal-root form[data-form="order"] #order-items-editor .stock-check-v284 {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 220px !important;
+    min-height: 42px !important;
+    padding: 8px 11px !important;
+  }
+  #modal-root form[data-form="order"] .stock-check-content-v284 {
+    font-size: .72rem !important;
+  }
+  #modal-root form[data-form="order"] .stock-check input[type="checkbox"] {
+    width: 18px !important;
+    height: 18px !important;
+    min-width: 18px !important;
+    min-height: 18px !important;
+  }
+  #modal-root form[data-form="order"] .stock-check,
+  #modal-root form[data-form="order"] .stock-check-v284 {
+    grid-template-columns: 18px minmax(0, 1fr) !important;
+  }
+}
+
+@container osv-items (max-width: 900px) {
+  #modal-root form[data-form="order"] .form-section:has(#order-items-editor) .stock-check,
+  #modal-root form[data-form="order"] .form-section:has(#order-items-editor) .stock-check-v284 {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 240px !important;
+  }
+}
+
+/* ============================================================
+   3. SEPARADOR — a bolinha "•" com espaço dos dois lados
+   ============================================================ */
+.inline-dot-v280,
+.inline-dot-v288 {
+  display: inline !important;
+  margin: 0 .42rem !important;
+  color: var(--muted, #8aa5bf);
+  opacity: .85;
+  font-size: .82em;
+  line-height: 1;
+  vertical-align: baseline;
+  user-select: none;
+}
+.inline-information-v280 > strong,
+.inline-information-v280 > small,
+.inline-information-v280 > button,
+.inline-information-v280 > a {
+  vertical-align: baseline;
+}
+/* Nome e documento na mesma linha, nunca colados. */
+.inline-information-v280 > small.muted,
+#root td.inline-information-v280 > small.muted {
+  display: inline !important;
+  margin-left: 0 !important;
+}
+
+/* Rede de segurança: se por algum motivo a bolinha não for inserida,
+   o CSS garante o espaço e o separador mesmo assim. */
+#root td > strong + small.muted:not([data-dot-v288="span"]),
+#modal-root td > strong + small.muted:not([data-dot-v288="span"]) {
+  margin-left: .38rem;
+}
+
+@media (max-width: 620px) {
+  .inline-dot-v280,
+  .inline-dot-v288 {
+    margin: 0 .34rem !important;
+  }
+}
+
+/* ============================================================
+   4. PAINÉIS QUE SE ENCAVALAVAM E CORTAVAM PELA METADE
+   ============================================================
+   CAUSA: fora do modo de edição, cada painel continuava preso à altura
+   salva na grade (grid-row: início / span N linhas de 22px) com
+   overflow:hidden. Quando o conteúdo crescia — vários PDFs no histórico,
+   por exemplo — ele era cortado no meio e o painel de baixo subia por cima.
+
+   CORREÇÃO: as linhas da grade passam a ser minmax(22px, auto). A posição
+   e a largura salvas continuam valendo, mas a altura acompanha o conteúdo.
+   Nada é cortado e nada se sobrepõe. O modo de edição (.layout-editing-v256)
+   segue com a geometria rígida, senão o arraste perderia a referência. */
+#modal-root .modal:not(.layout-editing-v256) [data-layout-grid-v256].layout-grid-v256 {
+  grid-template-rows: repeat(var(--layout-grid-rows-v260, 1), minmax(22px, auto)) !important;
+  grid-auto-rows: minmax(22px, auto) !important;
+  align-items: start !important;
+  height: auto !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+#modal-root .modal:not(.layout-editing-v256) [data-layout-grid-v256] > [data-layout-item-v256] {
+  height: auto !important;
+  max-height: none !important;
+  min-height: min-content !important;
+  overflow: visible !important;
+  overscroll-behavior: auto !important;
+}
+
+/* Painéis com altura personalizada salva: a medida vira piso, não teto. */
+#modal-root .modal:not(.layout-editing-v256) [data-layout-item-v256].has-custom-layout-v256,
+form[data-layout-key-v256] .layout-grid-v256 > [data-layout-item-v256].has-custom-layout-v256,
+.detail-grid-v256 > section.card.has-custom-layout-v256,
+#modal-root form[data-form="order"] [data-layout-surface="order"] > [data-layout-item-v256].has-custom-layout-v256,
+#modal-root form[data-form="order"] .osv-custom-layout-surface-v221 > [data-layout-item-v256].has-custom-layout-v256 {
+  height: auto !important;
+  max-height: none !important;
+  min-height: calc(var(--layout-rows-v256, 4) * 22px) !important;
+  overflow: visible !important;
+  overscroll-behavior: auto !important;
+}
+
+/* Listas de PDFs, anexos e fotos crescem à vontade dentro do painel. */
+#modal-root .media-list,
+#modal-root .file-row,
+#modal-root .list-row,
+#modal-root .existing-attachments-editor,
+#modal-root .existing-media-editor {
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+/* ============================================================
+   5. REGRA GERAL DA ROLAGEM
+   ============================================================
+   Nenhum elemento do aplicativo prende o gesto. Se o ponteiro (ou o dedo)
+   estiver sobre algo que não rola, a página rola. */
+#root *,
+#modal-root * {
+  overscroll-behavior: auto !important;
+}
+
+/* As únicas áreas que legitimamente ficam com a rolagem para si,
+   porque realmente rolam por dentro. */
+#root .main,
+#root .sidebar,
+#root .mobile-menu-layer .sidebar,
+#root .audit-list,
+#root .quick-actions-menu,
+#root .client-suggestions,
+#root [role="listbox"],
+#modal-root .modal-body,
+#modal-root .mobile-bottom-sheet > .modal-body,
+#modal-root .pdf-page-scroll-v221,
+#modal-root .layout-canvas-scroll-v221,
+#modal-root .pdf-editor-toolbar-v221,
+#modal-root .pdf-page-tabs-v221,
+#modal-root .layout-properties-v221,
+#modal-root .pdf-properties-v221,
+#modal-root .pdf-components-panel-v221,
+#modal-root .quick-actions-menu,
+#modal-root .client-suggestions,
+#modal-root [role="listbox"],
+.pix-dialog-body-v224 {
+  overscroll-behavior: contain !important;
+}
+
+/* A tabela é o único caso misto: segura o gesto na horizontal,
+   repassa o vertical para a página. */
+#root .table-wrap,
+#modal-root .table-wrap {
+  overscroll-behavior-x: contain !important;
+  overscroll-behavior-y: auto !important;
+}
+
+@media (max-width: 900px) {
+  /* Celular: nada travado. A página inteira rola em qualquer ponto. */
+  #root *,
+  #modal-root *:not(.modal-body) {
+    overscroll-behavior: auto !important;
+  }
+  #modal-root .modal-body,
+  #modal-root .mobile-bottom-sheet > .modal-body,
+  #root .sidebar {
+    overscroll-behavior: contain !important;
+  }
+  #modal-root .modal:not(.layout-editing-v256) [data-layout-grid-v256].layout-grid-v256 {
+    grid-template-rows: none !important;
+    grid-auto-rows: auto !important;
+  }
+  #modal-root .modal:not(.layout-editing-v256) [data-layout-grid-v256] > [data-layout-item-v256] {
+    grid-column: 1 / -1 !important;
+    grid-row: auto !important;
+    min-height: 0 !important;
+  }
+}

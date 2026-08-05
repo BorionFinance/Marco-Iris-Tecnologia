@@ -1,0 +1,94 @@
+MARCO IRIS TECNOLOGIA — v2.8.8
+Rolagem livre, "Baixar estoque" enxuto e bolinha • como separador único
+
+------------------------------------------------------------
+1. ROLAGEM QUE NÃO FUNCIONAVA EM CIMA DA TABELA E DOS CARTÕES
+------------------------------------------------------------
+CAUSA ENCONTRADA
+Quando um elemento tem overflow em um só eixo (ex.: overflow-x:auto e
+overflow-y:visible), o navegador transforma o outro eixo em "auto"
+automaticamente. Com isso .table-wrap e os cartões dentro das janelas
+viravam áreas de rolagem nos DOIS eixos. Somado ao
+"overscroll-behavior: contain" aplicado na v2.8.7, o gesto vertical
+ficava preso dentro dessas caixas e a página não andava — exatamente as
+áreas rabiscadas nos prints.
+
+CORREÇÃO (css/v288-rolagem-bolinha-estoque.css)
+- .table-wrap continua rolando na horizontal, mas o eixo vertical volta a
+  repassar o gesto para a página (overscroll-behavior-y: auto).
+- Cartões, seções, blocos de detalhe e formulários dentro de #modal-root
+  deixam de ser áreas de rolagem (overflow: visible). Quem corta o excesso
+  horizontal continua sendo o corpo da janela.
+- Linhas e células clicáveis da lista de OSVs não sequestram mais o arrasto.
+- Os donos legítimos da rolagem NÃO foram tocados: .main no computador,
+  a própria página no celular e .modal-body dentro das janelas. Assim os
+  editores visuais de layout e de PDF continuam funcionando como antes.
+
+RESULTADO: rola em qualquer ponto da lista de OSVs, da ficha do cliente e
+da janela da OSV — inclusive por cima do nome, do equipamento, do status
+e do valor.
+
+------------------------------------------------------------
+2. BAIXAR ESTOQUE
+------------------------------------------------------------
+- Removido o ícone de três riscos (js/v284-marco-ajustes.js).
+- O texto "Baixar estoque" passa a ficar ao lado da caixa de seleção,
+  dentro da mesma pastilha.
+- Caixa de seleção menor (16px no computador, 18px no celular), cantos
+  arredondados e "certo" branco desenhado; fica verde-água quando marcada,
+  no mesmo verde de confirmação do sistema.
+- Pastilha mais baixa e mais discreta (38px de altura, 124px de largura),
+  com a coluna da linha de itens ajustada para a nova medida.
+- No celular ocupa a largura útil, com área de toque confortável.
+
+------------------------------------------------------------
+3. BOLINHA • COMO SEPARADOR ÚNICO
+------------------------------------------------------------
+- O ponto miúdo "·" foi substituído pela bolinha "•" com espaço dos dois
+  lados, em todo o sistema.
+- Cliente e CPF/CNPJ, equipamento e modelo, código e marca: nada mais
+  aparece colado.
+- js/v288-rolagem-bolinha-estoque.js faz a normalização de forma
+  idempotente (passar duas vezes não duplica nada) e acompanha
+  re-renderizações por MutationObserver.
+- js/v284-marco-ajustes.js voltou a usar a bolinha na coluna Equipamento
+  em vez de reescrever para "·".
+
+------------------------------------------------------------
+ARQUIVOS
+------------------------------------------------------------
+NOVOS
+  css/v288-rolagem-bolinha-estoque.css
+  js/v288-rolagem-bolinha-estoque.js
+ALTERADOS
+  js/v284-marco-ajustes.js  (sem ícone no estoque; bolinha na coluna Equipamento)
+  index.html                (registro dos novos arquivos, ?v=2.8.8)
+  sw.js                     (marco-iris-v2.8.8-rolagem-livre-bolinha-estoque)
+
+Nenhum arquivo removido. Nenhuma regra de dados, sincronização com o
+Google Drive ou geração de PDF foi alterada.
+
+
+============================================================
+COMPLEMENTO v2.8.9
+============================================================
+
+4. PAINÉIS ENCAVALADOS E CORTADOS PELA METADE
+CAUSA: fora do modo de edição, cada painel do detalhe continuava preso à
+altura salva na grade (grid-row com N linhas de 22px) somada a
+overflow:hidden. Quando o conteúdo crescia — o histórico de PDFs, por
+exemplo — ele era cortado no meio e o painel seguinte subia por cima.
+CORREÇÃO: as linhas da grade viraram minmax(22px, auto). A posição e a
+largura salvas continuam valendo; a altura passa a acompanhar o conteúdo.
+Alturas personalizadas viraram piso (min-height) em vez de teto.
+O modo de edição de layout mantém a geometria rígida, senão o arraste
+perderia a referência.
+
+5. REGRA GERAL DE ROLAGEM
+Nenhum elemento do aplicativo prende mais o gesto: onde não há rolagem
+própria, a página rola. Continuam com rolagem própria apenas as áreas
+que realmente rolam por dentro — corpo das janelas, menu lateral, área
+de conteúdo no computador, editores de layout e de PDF, listas de
+sugestão e o histórico de auditoria. A tabela é o único caso misto:
+segura o gesto na horizontal e repassa o vertical para a página.
+No celular nada fica travado: a página rola em qualquer ponto.

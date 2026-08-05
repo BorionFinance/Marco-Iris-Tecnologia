@@ -1,4 +1,4 @@
-/* Marco Iris v2.8.8 — desempenho, scroll nativo e correção de Itens/Serviços */
+/* Marco Iris v2.8.7 — desempenho, scroll nativo e correção de Itens/Serviços */
 html{scroll-behavior:auto!important}
 button,.btn,[data-action],summary,a,select,label.checkbox{touch-action:manipulation}
 .content,.modal-body,.table-wrap,.quick-actions-menu,.client-suggestions,[role="listbox"]{
@@ -109,85 +109,4 @@ button,.btn,[data-action],summary,a,select,label.checkbox{touch-action:manipulat
   #modal-root form[data-form="order"] .form-section:has(#order-items-editor) .stock-check,
   #modal-root form[data-form="order"] .form-section:has(#order-items-editor) .stock-check-v284{grid-column:2/4!important;grid-row:auto!important;width:100%!important;min-width:0!important}
   #modal-root form[data-form="order"] .form-section:has(#order-items-editor) [data-action="remove-item-row"]{grid-column:4!important;grid-row:1!important}
-}
-
-
-/* v2.8.8 — scroll contínuo em áreas interativas, menos repintura e leitura visual mais limpa. */
-#view-root .card,
-#view-root .table-wrap,
-#view-root .list-row,
-#view-root .toolbar,
-#modal-root .modal,
-#modal-root .card,
-#modal-root .list-row,
-#modal-root .table-wrap,
-.sidebar,
-.topbar{
-  backdrop-filter:none!important;
-  -webkit-backdrop-filter:none!important;
-  box-shadow:none!important;
-}
-
-#view-root .table-wrap,
-#modal-root .modal-body,
-#modal-root .table-wrap,
-#view-root .table-wrap *,
-#modal-root .modal-body *,
-#view-root button,
-#view-root a,
-#view-root select,
-#view-root input,
-#view-root textarea,
-#view-root label,
-#modal-root button,
-#modal-root a,
-#modal-root select,
-#modal-root input,
-#modal-root textarea,
-#modal-root label,
-.inline-status-shell,
-.inline-status,
-.stock-check,
-.stock-check-v284{
-  touch-action:pan-y pinch-zoom!important;
-}
-
-#view-root .table tbody tr,
-#view-root .osv-table tbody tr,
-#view-root .list-row,
-#modal-root .table tbody tr,
-#modal-root .list-row{
-  content-visibility:auto;
-  contain-intrinsic-size:58px;
-}
-
-.table td strong,
-.osv-table td strong,
-.table td small.muted,
-.osv-table td small.muted,
-.table td small,
-.osv-table td small,
-.list-row-main small{
-  display:block;
-}
-.table td small.muted,
-.osv-table td small.muted,
-.table td small,
-.osv-table td small,
-.list-row-main small{
-  margin-top:4px;
-  line-height:1.25;
-}
-
-.osv-table td .inline-status-shell,
-.osv-table td .inline-status{
-  width:100%;
-}
-
-#modal-root .definition-list dd,
-#modal-root .list-row-main,
-#view-root .table td,
-#view-root .osv-table td{
-  min-width:0;
-  overflow-wrap:anywhere;
 }
