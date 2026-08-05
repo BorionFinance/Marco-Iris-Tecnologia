@@ -1,4 +1,4 @@
-const CLOUD_ONLY_VERSION='marco-iris-v2.8.7-performance-native-scroll';
+const CLOUD_ONLY_VERSION='marco-iris-v2.8.8-performance-native-scroll';
 
 self.addEventListener('install',event=>{
   event.waitUntil(self.skipWaiting());

@@ -73,7 +73,7 @@
     qa('.osv-table tbody td:nth-child(4)', root).forEach(cell => {
       qa(':scope > .inline-dot-v280', cell).forEach(dot => dot.remove());
       const small = q(':scope > small.muted', cell);
-      if (small) small.textContent = small.textContent.replace(/^\s*[•●·]\s*/, ' · ');
+      if (small) small.textContent = small.textContent.replace(/^\s*[•●·]\s*/, ' • ');
       cell.dataset.v280Separator = '1';
     });
   }
@@ -88,7 +88,7 @@
     if (q('.stock-check-content-v284', label)) return;
     const content = document.createElement('span');
     content.className = 'stock-check-content-v284';
-    content.innerHTML = `${typeof icon === 'function' ? icon('stock', 17) : '↧'}<span>Baixar estoque</span>`;
+    content.innerHTML = `<span class="stock-check-title-v284">Baixar estoque</span>`;
     label.replaceChildren(input, content);
   }
 
@@ -358,7 +358,7 @@
       if (grid && !q('.stock-expense-callout-v284', form)) {
         const callout = document.createElement('div');
         callout.className = 'field full stock-expense-callout-v284';
-        callout.innerHTML = `<strong>Compra vinculada ao estoque</strong><span>${flow.quantity} unidade(s) · custo total ${moneyText(flow.totalCost)}. Ao salvar, produto/movimentação/despesa serão gravados e vinculados.</span>`;
+        callout.innerHTML = `<strong>Compra vinculada ao estoque</strong><span>${flow.quantity} unidade(s) • custo total ${moneyText(flow.totalCost)}. Ao salvar, produto/movimentação/despesa serão gravados e vinculados.</span>`;
         grid.prepend(callout);
       }
       dispatch(form.elements.value, 'input');
@@ -544,7 +544,7 @@
         const payment = data().payments.find(item => item.id === paymentId);
         if (!payment) throw new Error('A despesa foi salva, mas o vínculo com o estoque não foi encontrado.');
         patchPaymentLink(payment, records, flow);
-        await persist('Compra de estoque vinculada', `${payment.id} · ${records.movement.id} · ${flow.description}`);
+        await persist('Compra de estoque vinculada', `${payment.id} • ${records.movement.id} • ${flow.description}`);
         pendingStockExpense = null;
         if (typeof renderView === 'function') renderView();
         typeof toast === 'function' && toast('Produto, estoque e despesa salvos e vinculados.', 'ok');
