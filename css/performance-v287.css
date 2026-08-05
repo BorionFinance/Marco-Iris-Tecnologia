@@ -73,8 +73,6 @@ button,.btn,[data-action],summary,a,select,label.checkbox{touch-action:manipulat
   line-height:1.05!important;
 }
 
-.orders-pagination-v287{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 4px 2px;color:var(--muted)}
-.orders-pagination-v287>div{display:flex;align-items:center;gap:10px}.orders-pagination-v287 strong{color:var(--text);font-size:.85rem}
 
 /* PWA/celular: elimina animações decorativas e blur que causavam quedas de FPS. */
 @media (max-width:900px),(pointer:coarse){
@@ -89,8 +87,6 @@ button,.btn,[data-action],summary,a,select,label.checkbox{touch-action:manipulat
   }
   .content,.modal-body,.table-wrap{touch-action:pan-y pinch-zoom}
   .mobile-bottom-nav{contain:layout paint style}
-  .orders-pagination-v287{flex-direction:column;align-items:stretch}
-  .orders-pagination-v287>div{justify-content:space-between}.orders-pagination-v287 strong{display:none}
 }
 
 @container osv-items (max-width:860px){

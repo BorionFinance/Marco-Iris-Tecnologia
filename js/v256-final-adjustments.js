@@ -5,7 +5,7 @@
  * somente apresentação, filtros, cliques e personalização visual.
  */
 (() => {
-  const VERSION=window.MARCO_APP_VERSION||'2.8.13';
+  const VERSION=window.MARCO_APP_VERSION||'2.8.14';
   const ORDER_STATUSES=['Orçamento','Em andamento','Aguardando peça','Concluída','Cancelada'];
   const INTERACTIVE_SELECTOR='button,a,input,select,textarea,label,summary,details,[role="button"],[contenteditable="true"]';
   const ENTITY_EDIT_ACTION={service:'edit-service',product:'edit-product',supply:'edit-supply',movement:'edit-stock-movement'};
@@ -13,8 +13,6 @@
   const PRIVACY_TEXT_ORIGINALS=new WeakMap();
   const PRIVACY_TITLE_ORIGINALS=new WeakMap();
   let RESIZE_SESSION=null;
-  let ORDERS_PAGE_V287=1;
-  const ORDERS_PAGE_SIZE_V287=50;
 
   if(typeof ICONS!=='undefined'&&!ICONS['eye-off'])ICONS['eye-off']='<path d="M3 3l18 18"/><path d="M10.6 10.7a2 2 0 0 0 2.7 2.7"/><path d="M9.9 4.3A10.7 10.7 0 0 1 12 4c6 0 10 8 10 8a18.2 18.2 0 0 1-2.1 3.1"/><path d="M6.6 6.6C3.8 8.5 2 12 2 12s4 8 10 8a9.7 9.7 0 0 0 4.1-.9"/>';
   if(typeof ICONS!=='undefined'&&!ICONS.archive)ICONS.archive='<path d="M4 4h16v4H4z"/><path d="M6 8v12h12V8"/><path d="M10 12h4"/>';
@@ -142,11 +140,8 @@
     const mode=getViewMode('orders'),all=[...data().serviceOrders].filter(o=>matches(o.id,o.clientName,findClient(o.clientId)?.name,o.equipmentType,o.brandModel,o.status,o.reportedIssue));
     const rows=all.filter(o=>(SHOW_ARCHIVED.orders?o.registrationStatus==='Inativo':o.registrationStatus!=='Inativo')&&matchesPeriod256(o.openedAt||o.createdAt,'orders')).sort((a,b)=>String(b.openedAt||'').localeCompare(String(a.openedAt||'')));
     const status=currentOrderStatus(),filtered=status==='Todos'?rows:rows.filter(o=>norm(o.status)===norm(status)),archived=all.filter(o=>o.registrationStatus==='Inativo').length;
-    const totalPages=Math.max(1,Math.ceil(filtered.length/ORDERS_PAGE_SIZE_V287));
-    ORDERS_PAGE_V287=Math.max(1,Math.min(totalPages,Number(ORDERS_PAGE_V287)||1));
-    const start=(ORDERS_PAGE_V287-1)*ORDERS_PAGE_SIZE_V287,end=Math.min(filtered.length,start+ORDERS_PAGE_SIZE_V287),visibleOrders=filtered.slice(start,end);
-    const pagination=filtered.length>ORDERS_PAGE_SIZE_V287?`<nav class="orders-pagination-v287" aria-label="Paginação das ordens de serviço"><span>${start+1}–${end} de ${filtered.length}</span><div><button type="button" class="btn ghost compact" data-action="orders-page-v287" data-page="${ORDERS_PAGE_V287-1}" ${ORDERS_PAGE_V287<=1?'disabled':''} aria-label="Página anterior">${icon('arrow',15)} Anterior</button><strong>Página ${ORDERS_PAGE_V287} de ${totalPages}</strong><button type="button" class="btn ghost compact" data-action="orders-page-v287" data-page="${ORDERS_PAGE_V287+1}" ${ORDERS_PAGE_V287>=totalPages?'disabled':''} aria-label="Próxima página">Próxima ${icon('arrow',15)}</button></div></nav>`:'';
-    return `<div class="toolbar unified-toolbar-v256 orders-toolbar"><div class="toolbar-left"><button class="btn primary control-main-v256" data-action="new-order">${icon('plus')} Nova OSV</button>${periodControls256('orders')}<select class="filter-control control-status-v256" data-order-status-v256 aria-label="Filtrar por status"><option>Todos</option>${ORDER_STATUSES.map(value=>`<option ${value===status?'selected':''}>${esc(value)}</option>`).join('')}</select>${archivedButton('toggle-archived-orders','Arquivadas',archived,SHOW_ARCHIVED.orders)}</div><div class="toolbar-right">${viewModeSwitcher('orders',mode)}<span class="badge blue">${filtered.length} OSVs</span></div></div><section class="card view-mode-content mode-${mode}" data-view-content="orders"><div class="table-wrap"><table class="table osv-table"><thead><tr><th>OSV</th><th>Abertura</th><th>Cliente</th><th>Equipamento</th><th>Financeiro</th><th>Status</th><th class="text-right">Valor</th><th>Ações</th></tr></thead><tbody>${visibleOrders.map(order=>{const f=orderFinance256(order);return `<tr class="clickable-row-v256" data-row-action="view-order" data-id="${attr(order.id)}"><td><strong>${esc(order.id)}</strong>${order.registrationStatus==='Inativo'?'<small class="muted">Arquivada</small>':''}</td><td>${formatDate(order.openedAt)}</td><td><button class="text-link" data-action="view-client" data-id="${attr(order.clientId)}">${esc(order.clientName||findClient(order.clientId)?.name||'—')}</button></td><td><strong>${esc(order.equipmentType||'—')}</strong>${order.brandModel?`<small class="muted"> · ${esc(order.brandModel)}</small>`:''}</td><td>${statusBadge(f.status==='Parcial'&&f.overdue?'Parcial - vencido':f.status)}<small class="muted">${f.balance>0?currency(f.balance)+' pendente':''}</small></td><td><div class="inline-status-shell" data-status-tone="${attr(norm(order.status))}"><select class="inline-status" data-quick-order-status="${attr(order.id)}" aria-label="Status operacional da OSV ${attr(order.id)}">${ORDER_STATUSES.map(value=>`<option value="${attr(value)}" ${value===order.status?'selected':''}>${esc(value)}</option>`).join('')}</select><span class="inline-status-chevron" aria-hidden="true">${icon('arrow',14)}</span><span class="inline-status-saving" aria-hidden="true"></span></div></td><td class="text-right"><strong>${currency(order.total)}</strong></td><td>${quickOrderActions256(order)}</td></tr>`;}).join('')||'<tr><td colspan="8"><div class="empty">Nenhuma OSV encontrada.</div></td></tr>'}</tbody></table></div>${pagination}</section>`;
+    const visibleOrders=filtered;
+    return `<div class="toolbar unified-toolbar-v256 orders-toolbar"><div class="toolbar-left"><button class="btn primary control-main-v256" data-action="new-order">${icon('plus')} Nova OSV</button>${periodControls256('orders')}<select class="filter-control control-status-v256" data-order-status-v256 aria-label="Filtrar por status"><option>Todos</option>${ORDER_STATUSES.map(value=>`<option ${value===status?'selected':''}>${esc(value)}</option>`).join('')}</select>${archivedButton('toggle-archived-orders','Arquivadas',archived,SHOW_ARCHIVED.orders)}</div><div class="toolbar-right">${viewModeSwitcher('orders',mode)}<span class="badge blue">${filtered.length} OSVs</span></div></div><section class="card view-mode-content mode-${mode}" data-view-content="orders"><div class="table-wrap"><table class="table osv-table"><thead><tr><th>OSV</th><th>Abertura</th><th>Cliente</th><th>Equipamento</th><th>Financeiro</th><th>Status</th><th class="text-right">Valor</th><th>Ações</th></tr></thead><tbody>${visibleOrders.map(order=>{const f=orderFinance256(order);return `<tr class="clickable-row-v256" data-row-action="view-order" data-id="${attr(order.id)}"><td><strong>${esc(order.id)}</strong>${order.registrationStatus==='Inativo'?'<small class="muted">Arquivada</small>':''}</td><td>${formatDate(order.openedAt)}</td><td><button class="text-link" data-action="view-client" data-id="${attr(order.clientId)}">${esc(order.clientName||findClient(order.clientId)?.name||'—')}</button></td><td><strong>${esc(order.equipmentType||'—')}</strong>${order.brandModel?`<small class="muted"> · ${esc(order.brandModel)}</small>`:''}</td><td>${statusBadge(f.status==='Parcial'&&f.overdue?'Parcial - vencido':f.status)}<small class="muted">${f.balance>0?currency(f.balance)+' pendente':''}</small></td><td><div class="inline-status-shell" data-status-tone="${attr(norm(order.status))}"><select class="inline-status" data-quick-order-status="${attr(order.id)}" aria-label="Status operacional da OSV ${attr(order.id)}">${ORDER_STATUSES.map(value=>`<option value="${attr(value)}" ${value===order.status?'selected':''}>${esc(value)}</option>`).join('')}</select><span class="inline-status-chevron" aria-hidden="true">${icon('arrow',14)}</span><span class="inline-status-saving" aria-hidden="true"></span></div></td><td class="text-right"><strong>${currency(order.total)}</strong></td><td>${quickOrderActions256(order)}</td></tr>`;}).join('')||'<tr><td colspan="8"><div class="empty">Nenhuma OSV encontrada.</div></td></tr>'}</tbody></table></div></section>`;
   };
 
   renderClients=function(){
@@ -578,8 +573,7 @@
   handleAction=async function(button,...rest){
     const action=button?.dataset?.action||'';
     if(action==='toggle-privacy'){const result=await handleActionBase256.call(this,button,...rest);requestAnimationFrame(()=>{maskPrivacy256(document.getElementById('root'));maskPrivacy256(document.querySelector('#modal-root .modal'));});return result;}
-    if(action==='clear-period-v256'){const state=periodState256(button.dataset.section);state.month='';state.fromDay='';state.toDay='';if(button.dataset.section==='orders')ORDERS_PAGE_V287=1;renderView();return;}
-    if(action==='orders-page-v287'){ORDERS_PAGE_V287=Math.max(1,Number(button.dataset.page)||1);renderView();requestAnimationFrame(()=>document.querySelector('[data-view-content="orders"]')?.scrollIntoView({block:'start',behavior:'auto'}));return;}
+    if(action==='clear-period-v256'){const state=periodState256(button.dataset.section);state.month='';state.fromDay='';state.toDay='';renderView();return;}
     if(action==='toggle-layout-v256'){if(MODAL_LAYOUT.editing)await saveModalLayout256();else{MODAL_LAYOUT.snapshot=captureModalLayout256(document.querySelector('#modal-root .modal'),document.querySelector('#modal-root .modal')?.dataset.layoutKeyV256);setModalEditing256(true);}return;}
     if(action==='cancel-layout-v256'){restoreSnapshot256(MODAL_LAYOUT.snapshot);MODAL_LAYOUT.snapshot=null;setModalEditing256(false);return;}
     if(action==='reset-layout-v256'){await resetModalLayout256();return;}
@@ -588,10 +582,10 @@
 
   document.addEventListener('change',event=>{
     const target=event.target;
-    if(target.matches('[data-period-month-v256]')){periodState256(target.dataset.periodMonthV256).month=target.value;if(target.dataset.periodMonthV256==='orders')ORDERS_PAGE_V287=1;renderView();return;}
-    if(target.matches('[data-period-from-v256]')){periodState256(target.dataset.periodFromV256).fromDay=String(clampDay(target.value)||'');if(target.dataset.periodFromV256==='orders')ORDERS_PAGE_V287=1;renderView();return;}
-    if(target.matches('[data-period-to-v256]')){periodState256(target.dataset.periodToV256).toDay=String(clampDay(target.value)||'');if(target.dataset.periodToV256==='orders')ORDERS_PAGE_V287=1;renderView();return;}
-    if(target.matches('[data-order-status-v256]')){settings().orderStatusFilterV256=target.value;ORDERS_PAGE_V287=1;renderView();return;}
+    if(target.matches('[data-period-month-v256]')){periodState256(target.dataset.periodMonthV256).month=target.value;renderView();return;}
+    if(target.matches('[data-period-from-v256]')){periodState256(target.dataset.periodFromV256).fromDay=String(clampDay(target.value)||'');renderView();return;}
+    if(target.matches('[data-period-to-v256]')){periodState256(target.dataset.periodToV256).toDay=String(clampDay(target.value)||'');renderView();return;}
+    if(target.matches('[data-order-status-v256]')){settings().orderStatusFilterV256=target.value;renderView();return;}
   },true);
 
   function activateRow256(row){
